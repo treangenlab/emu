@@ -1,0 +1,6 @@
+._.DS_Store
+.DS_Store
+._.gitlab-ci.yml
+*.pyc
+
+input/*
