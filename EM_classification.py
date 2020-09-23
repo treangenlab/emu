@@ -11,17 +11,13 @@ import argparse
 import pathlib
 import subprocess
 
-
 import math
 import pysam
-#import pyfastx
 import numpy as np
 import pandas as pd
 from collections import Counter 
-from flatten_dict import unflatten, flatten 
-
+from flatten_dict import unflatten
 from Bio import SeqIO
-from ete3 import NCBITaxa
 
 
 def get_align_stats(cigar_stats):
@@ -148,25 +144,59 @@ def f_reduce(f, threshold):
     f_total = sum(f_dropped .values())
     return {k:v/f_total for k,v in f_dropped.items()}
 
-def f_to_lineage_df(f, seq2taxid_path, tsv_output_name):
-    '''converts composition vector f to a pandas df with cols lineages, abundance.
-        Stores df as .tsv file in tsv_output_name
+def lineage_dict_from_tid(tid, nodes_df, names_df):
+    '''get dict of lineage for given taxid
     
+    tid(str): tax id to extract lineage dict from
+    nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'] with tax_id as index
+    names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt','unique_name', 'name_class'] with tax_id as index
+    return(dict): [taxonomy rank]:name
+    '''
+    lineage_dict = {}
+    rank = None
+    while (rank != 'no rank'):
+        row = nodes_df.loc[tid]
+        rank = row['rank']
+        lineage_dict[rank] = names_df.loc[tid]['name_txt']
+        tid = row['parent_tax_id']
+    return lineage_dict
+
+def f_to_lineage_df(f, tsv_output_name, nodes_path, names_path, seq2taxid_path):
+    '''converts composition vector f to a pandas df where each row contains abundance and 
+        tax lineage for each classified species.
+        Stores df as .tsv file in tsv_output_name.
+
         f (arr): composition vector with keys database sequnce names for abundace output
-        seq2taxid_path (str): string path to tab separated file of seqid and taxids
         tsv_output_name (str): name of output .tsv file of generated dataframe
+        nodes_path (str): string path to nodes.dmp from ncbi taxonomy dump
+        names_path (str): string path to names.dmp from ncbi taxonomy dump
+        seq2taxid_path (str): string path to tab separated file of seqid and taxids
         returns (df): pandas df with lineage and abundances for values in f
     '''
-    ncbi = NCBITaxa()
-    df_seq2tax = pd.read_csv(seq2taxid_path, sep='\t', header=None)
-    seq2taxid = dict(zip(df_seq2tax[0], df_seq2tax[1])) 
-    ncbi.translate_to_names(seq2taxid.values())
+    name_headers = ['tax_id', 'name_txt','unique_name', 'name_class']
+    node_headers = ['tax_id', 'parent_tax_id', 'rank']
 
-    lineages = [(';').join(ncbi.translate_to_names(ncbi.get_lineage(seq2taxid[k]))) for k in f]
-    results_df = pd.DataFrame(list(zip(lineages, f.values())), 
-               columns =['lineage', 'abundance'])
-    results_df = results_df[results_df['abundance']>0].groupby("lineage").sum().sort_values('lineage')
-    results_df.to_csv(f"{tsv_output_name}.tsv", sep='\t')
+    # convert taxonomy files to dataframes
+    seq2tax_df = pd.read_csv(seq2taxid_path, sep='\t', header=None)
+    seq2taxid = dict(zip(seq2tax_df[0], seq2tax_df[1])) 
+    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1,3,5,7], axis=1)
+    names_df.columns = name_headers
+    names_df = names_df[names_df['name_class']=='scientific name'].set_index('tax_id')
+    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0,2,4]]
+    nodes_df.columns = node_headers
+    nodes_df = nodes_df.set_index("tax_id")
+    
+    tax_ids = [seq2taxid[seqid] for seqid in f.keys()]
+    f_tax = dict.fromkeys(tax_ids, 0)
+    for seqid, v in f.items():
+        f_tax[seq2taxid[seqid]] += v   
+    results_df = pd.DataFrame(list(zip(f_tax.keys(), f_tax.values())), 
+               columns =['tax_id','abundance'])
+    lineages = results_df['tax_id'].apply(lambda x: lineage_dict_from_tid(str(x), nodes_df, names_df))
+    results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1) 
+    results_df = results_df.sort_values(['phylum','class','order','family','genus','species']).reset_index(drop=True)
+    
+    results_df.to_csv(f"{tsv_output_name}.tsv", index=False, sep='\t')
     return results_df
 
 
@@ -180,12 +210,15 @@ def main():
 
 
     # initialize values
+    db_tax_path = "ncbi16s_db/"
+    names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
+    nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
+    seq2taxid_path = db_tax_path + "ncbi16s_seq2tax.map"
     db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
-    db_seq2taxid_path = "ncbi16s_db/ncbi16s_seq2tax.map"
     db_ids = [record.id for record in SeqIO.parse(db_fasta_path, "fasta")]
     output_dir = "results/"
     if not os.path.exists(output_dir): os.makedirs(output_dir)
-    
+
     filename = pathlib.PurePath(args.input_file).stem 
     filetype = pathlib.PurePath(args.input_file).suffix
     pwd = os.getcwd()
@@ -205,7 +238,7 @@ def main():
     log_L_rgs = log_L_rgs_dict(sam_file, p_char)
     f = EM_iterations(log_L_rgs, db_ids)
     f_dropped = f_reduce(f, .01)
-    results_df = f_to_lineage_df(f_dropped, db_seq2taxid_path, os.path.join(output_dir, filename))
+    results_df = f_to_lineage_df(f_dropped, os.path.join(output_dir, filename), nodes_path, names_path, seq2taxid_path)
     
 main()
 
