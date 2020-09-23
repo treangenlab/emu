@@ -14,7 +14,7 @@ import subprocess
 
 import math
 import pysam
-import pyfastx
+#import pyfastx
 import numpy as np
 import pandas as pd
 from collections import Counter 
@@ -88,7 +88,7 @@ def log_L_rgs_dict(bwa_sam, p_char):
     return log_L_rgs
             
 
-def EM_iterations(log_L_rgs, db_ids, n_reads):
+def EM_iterations(log_L_rgs, db_ids):
     '''Expectation maximization algorithm for alignments in log_L_rgs dict
         
         log_L_rgs: dict[(r,s)]=log(L(r|s))
@@ -114,6 +114,7 @@ def EM_iterations(log_L_rgs, db_ids, n_reads):
         L_sgr = unflatten({(s,r):v/L_r_c[r] for (r,s),v in L_rns_c.items()})
     
         # update total likelihood and f vector
+        n_reads = len(L_r_c)
         log_L_r = {r:math.log(v)-log_c[r] for r,v in L_r_c.items()}    
         prev_log_likelihood = total_log_likelihood
         total_log_likelihood = sum(log_L_r.values())
@@ -187,15 +188,15 @@ def main():
     
     filename = pathlib.PurePath(args.input_file).stem 
     filetype = pathlib.PurePath(args.input_file).suffix
+    pwd = os.getcwd()
     
     if filetype == '.sam':
-        sam_file = args.input_file
-        n_read = 10
+        sam_file = f"{args.input_file}"
     else:
-        sam_file = f"{output_dir}/{filename}.sam"
-        n_reads = len(pyfastx.Fasta(args.input_fastx))
-        subprocess.Popen(
-            f"bwa mem -a -x ont2d ncbi16s_db/bwa_dbs {args.input_fastx} > {sam_file}",
+        sam_file = os.path.join(output_dir, f"{filename}.sam")
+        pwd = os.getcwd()
+        subprocess.check_output(
+            f"bwa mem -a -x ont2d {pwd}/ncbi16s_db/bwa_dbs/ncbi_16s {args.input_file} > {sam_file}",
             shell=True)
 
 
@@ -204,9 +205,7 @@ def main():
     log_L_rgs = log_L_rgs_dict(sam_file, p_char)
     f = EM_iterations(log_L_rgs, db_ids)
     f_dropped = f_reduce(f, .01)
-    
-
-    results_df = f_to_lineage_df(f_dropped, f"{output_dir}/{sam_file}")
+    results_df = f_to_lineage_df(f_dropped, db_seq2taxid_path, os.path.join(output_dir, filename))
     
 main()
 
