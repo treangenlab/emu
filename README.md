@@ -6,7 +6,15 @@ full-length 16s classification software
 ## Expectation Maximization Classification
 
 **dependencies:**
+[bwa](https://github.com/lh3/bwa)
+```bash
+conda config --add channels r
+conda config --add channels bioconda
+conda install pysam
+conda install pandas
+pip install flatten-dict
 
+```
 
 
 
