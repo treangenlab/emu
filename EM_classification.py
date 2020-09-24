@@ -154,7 +154,7 @@ def lineage_dict_from_tid(tid, nodes_df, names_df):
     '''
     lineage_dict = {}
     rank = None
-    while (rank != 'no rank'):
+    while (rank != 'superkingdom'):
         row = nodes_df.loc[tid]
         rank = row['rank']
         lineage_dict[rank] = names_df.loc[tid]['name_txt']
