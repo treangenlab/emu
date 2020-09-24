@@ -130,7 +130,7 @@ def EM_iterations(log_L_rgs, db_ids):
             raise ValueError(f"total_log_likelihood decreased from prior iteration")
     
         # exit loop if small increase
-        if total_log_likelihood - prev_log_likelihood < .001:
+        if total_log_likelihood - prev_log_likelihood < .1:
             return f
         
 def f_reduce(f, threshold):
@@ -194,7 +194,11 @@ def f_to_lineage_df(f, tsv_output_name, nodes_path, names_path, seq2taxid_path):
                columns =['tax_id','abundance'])
     lineages = results_df['tax_id'].apply(lambda x: lineage_dict_from_tid(str(x), nodes_df, names_df))
     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1) 
-    results_df = results_df.sort_values(['phylum','class','order','family','genus','species']).reset_index(drop=True)
+    header_order = ['abundance', 'species', 'genus', 'family', 'order', 'class', 
+                    'phylum', 'clade', 'superkingdom', 'strain', 'subspecies', 
+                    'species subgroup', 'species group', 'tax_id']
+    results_df = results_df.sort_values(header_order[8:0:-1]).reset_index(drop=True)
+    results_df = results_df.reindex(header_order, axis=1)
     
     results_df.to_csv(f"{tsv_output_name}.tsv", index=False, sep='\t')
     return results_df
@@ -237,7 +241,8 @@ def main():
     p_char = get_char_align_probabilites(sam_file)
     log_L_rgs = log_L_rgs_dict(sam_file, p_char)
     f = EM_iterations(log_L_rgs, db_ids)
-    f_dropped = f_reduce(f, .01)
+    f_dropped = f_reduce(f, .0001)
+    results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full", nodes_path, names_path, seq2taxid_path)
     results_df = f_to_lineage_df(f_dropped, os.path.join(output_dir, filename), nodes_path, names_path, seq2taxid_path)
     
 main()
