@@ -31,6 +31,8 @@ def get_align_stats(cigar_stats):
     char_align_stats = dict(zip(cigar_headers, cigar_stats))
     nm = char_align_stats.pop('NM')
     char_align_stats['X'] = nm - char_align_stats['I'] - char_align_stats['D']
+    char_align_stats['M'] -= char_align_stats['X']
+    char_align_stats['C'] = char_align_stats['H'] + char_align_stats['S']
     return char_align_stats
 
 def get_char_align_probabilites(bwa_sam):
@@ -45,7 +47,7 @@ def get_char_align_probabilites(bwa_sam):
     samfile = pysam.AlignmentFile(bwa_sam)
     char_align_stats_primary = {}
     for read in samfile.fetch():
-        if not read.is_secondary:
+        if not read.is_secondary and not read.is_supplementary:
             read_align_stats = get_align_stats(read.get_cigar_stats()[0])
             char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
     n_char = sum(char_align_stats_primary.values())
@@ -59,7 +61,7 @@ def compute_log_L_rgs(p_char, cigar_stats):
         return: float log(L(r|s)) for sequences r and s in cigar_stats alignment
     '''
     value = 0
-    for char in ['M','X','I','D','S','H']:
+    for char in ['M','X','I','D','C']:
         if char not in p_char and cigar_stats[char] > 0:
             return None
         elif char in p_char:
@@ -130,7 +132,7 @@ def EM_iterations(log_L_rgs, db_ids):
             raise ValueError(f"total_log_likelihood decreased from prior iteration")
     
         # exit loop if small increase
-        if total_log_likelihood - prev_log_likelihood < .1:
+        if total_log_likelihood - prev_log_likelihood < .01:
             return f
         
 def f_reduce(f, threshold):
@@ -245,7 +247,8 @@ def main():
     results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full", nodes_path, names_path, seq2taxid_path)
     results_df = f_to_lineage_df(f_dropped, os.path.join(output_dir, filename), nodes_path, names_path, seq2taxid_path)
     
-main()
+if __name__ == "__main__":
+    main()
 
 
 
