@@ -14,6 +14,7 @@ import re
 
 import math
 import pysam
+import numpy as np
 import pandas as pd
 from collections import Counter
 from flatten_dict import unflatten
@@ -138,7 +139,7 @@ def get_char_align_probabilites(sam, remove_n_cols=False):
                 for k, v in cigar_removed_stats.items():
                     read_align_stats[k] -= v
             char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
-    char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I']}
+    char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X']}
     n_char = sum(char_align_stats_primary_oi.values())
     return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}, remove_cols_dict
 
@@ -150,8 +151,7 @@ def compute_log_L_rgs(p_char, cigar_stats):
         cigar_stats: dict of cigar stats to compute
         return: float log(L(r|s)) for sequences r and s in cigar_stats alignment
     """
-    cigar_stats_oi = {k: cigar_stats[k] for k in ['=', 'C', 'X', 'I']}
-    #log_char_sum = math.log(sum(cigar_stats_oi.values()))
+    cigar_stats_oi = {k: cigar_stats[k] for k in ['=', 'C', 'X']}
     char_sum = sum(cigar_stats_oi.values())
     value = 0
     prob_sum = 0
@@ -161,11 +161,11 @@ def compute_log_L_rgs(p_char, cigar_stats):
         elif char in p_char:
             prob_sum += p_char[char] * cigar_stats_oi[char]
             value += math.log(p_char[char]) * cigar_stats_oi[char]
-    #value += math.log(prob_sum/sum(cigar_stats_oi.values())) * cigar_stats['I']
+    value += math.log(prob_sum/sum(cigar_stats_oi.values())) * cigar_stats['I']
     return value
 
 
-def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
+def log_L_rgs_dict(bwa_sam, p_char, seqid_to_tid_df, remove_cols_dict=None):
     """dict containing log(L(r|s)) for all pairwise alignments in bwa output
     
         bwa_sam: path to sam file bwa output
@@ -186,14 +186,16 @@ def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
                     align_stats[k] = align_stats[k] - v
             val = compute_log_L_rgs(p_char, align_stats)
             data += [align_stats, val]
+            ref_name, query_name = alignment.reference_name, alignment.query_name
+            species_tid = seqid_to_tid_df.loc[ref_name]['species_tid']
+            if ((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < val) and val:
+                log_L_rgs[(query_name, species_tid)] = val
+                data += [species_tid]
             data_cigars.append(data)
-            if ((alignment.query_name, alignment.reference_name) not in log_L_rgs
-                or log_L_rgs[(alignment.query_name, alignment.reference_name)] < val) and val:
-                log_L_rgs[(alignment.query_name, alignment.reference_name)] = val
         else:
             data_cigars.append([alignment.query_name, "-"])
 
-    df_cigars = pd.DataFrame(data_cigars, columns=['query', 'reference', 'cigar', 'cigar_n_removed', 'score'])
+    df_cigars = pd.DataFrame(data_cigars, columns=['query', 'reference', 'cigar', 'cigar_n_removed', 'score', 'species_tid'])
     df_cigars.to_csv("cigar_scores.tsv", sep='\t', index=False)
     return log_L_rgs
 
@@ -244,7 +246,7 @@ def EM_iterations(log_L_rgs, db_ids):
             raise ValueError(f"total_log_likelihood decreased from prior iteration")
 
         # exit loop if small increase
-        if total_log_likelihood - prev_log_likelihood < 1:
+        if total_log_likelihood - prev_log_likelihood < .01:
             return f
 
 
@@ -258,6 +260,13 @@ def f_reduce(f, threshold):
     f_dropped = {k: v for k, v in f.items() if v > threshold}
     f_total = sum(f_dropped.values())
     return {k: v / f_total for k, v in f_dropped.items()}
+
+def get_species_tid(tid, nodes_df):
+    row = nodes_df.loc[str(tid)]
+    while row['rank'] != 'species':
+        parent_tid = row['parent_tax_id']
+        row = nodes_df.loc[str(parent_tid)]
+    return row.name
 
 
 def lineage_dict_from_tid(tid, nodes_df, names_df):
@@ -278,7 +287,7 @@ def lineage_dict_from_tid(tid, nodes_df, names_df):
     return lineage_dict
 
 
-def f_to_lineage_df(f, tsv_output_name, nodes_path, names_path, seq2taxid_path):
+def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
     """converts composition vector f to a pandas df where each row contains abundance and
         tax lineage for each classified species.
         Stores df as .tsv file in tsv_output_name.
@@ -290,24 +299,8 @@ def f_to_lineage_df(f, tsv_output_name, nodes_path, names_path, seq2taxid_path):
         seq2taxid_path (str): string path to tab separated file of seqid and taxids
         returns (df): pandas df with lineage and abundances for values in f
     """
-    name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
-    node_headers = ['tax_id', 'parent_tax_id', 'rank']
 
-    # convert taxonomy files to dataframes
-    seq2tax_df = pd.read_csv(seq2taxid_path, sep='\t', header=None)
-    seq2taxid = dict(zip(seq2tax_df[0], seq2tax_df[1]))
-    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
-    names_df.columns = name_headers
-    names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
-    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
-    nodes_df.columns = node_headers
-    nodes_df = nodes_df.set_index("tax_id")
-
-    tax_ids = [seq2taxid[seqid] for seqid in f.keys()]
-    f_tax = dict.fromkeys(tax_ids, 0)
-    for seqid, v in f.items():
-        f_tax[seq2taxid[seqid]] += v
-    results_df = pd.DataFrame(list(zip(f_tax.keys(), f_tax.values())), columns=["tax_id", "abundance"])
+    results_df = pd.DataFrame(list(zip(f.keys(), f.values())), columns=["tax_id", "abundance"])
     lineages = results_df["tax_id"].apply(lambda x: lineage_dict_from_tid(str(x), nodes_df, names_df))
     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
     header_order = ["abundance", "species", "genus", "family", "order", "class",
@@ -329,21 +322,38 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # initialize values
-    db_tax_path = "ncbi16s_db/"
-    names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
-    nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
+    db_tax_path = "rdp16s_db/"
+    names_path = db_tax_path + "ames.dmp"
+    nodes_path = db_tax_path + "nodes.dmp"
     #seq2taxid_path = db_tax_path + "ncbi16s_seq2tax.map"
-    seq2taxid_path = "input/ncbi16s_zymo_db/ncbi16s_seq2tax.map"
+    seqid_to_tid_path = "input/nrdp16s_db/seqid2taxid.map"
     #db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
-    db_fasta_path = "input/ncbi16s_zymo_db/bac_arch_zymo.16SrRNA.fna"
-    db_ids = [record.id for record in SeqIO.parse(db_fasta_path, "fasta")]
-    output_dir = "results_new/"
-    if not os.path.exists(output_dir): os.makedirs(output_dir)
+    db_fasta_path = "input/nrdp16s_db/arch_bac.fna"
 
+    # convert taxonomy files to dataframes
+    name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
+    node_headers = ['tax_id', 'parent_tax_id', 'rank']
+    seqid_to_tid_df = pd.read_csv(seqid_to_tid_path, sep='\t', header=None, names=['seq_id', 'tax_id'], index_col=0)
+    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
+    names_df.columns = name_headers
+    names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
+    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
+    nodes_df.columns = node_headers
+    nodes_df = nodes_df.set_index("tax_id")
+
+    # create species level db df
+    seqid_to_tid_df['name'] = seqid_to_tid_df['tax_id'].apply(lambda x: names_df.loc[str(x)]['name_txt'])
+    seqid_to_tid_df['species_tid'] = seqid_to_tid_df['tax_id'].apply(lambda tid: get_species_tid(tid, nodes_df))
+    db_species_tids = np.unique(seqid_to_tid_df['species_tid'])
+
+    # output files
+    output_dir = "results_speciestid/"
+    if not os.path.exists(output_dir): os.makedirs(output_dir)
     filename = pathlib.PurePath(args.input_file).stem
     filetype = pathlib.PurePath(args.input_file).suffix
     pwd = os.getcwd()
 
+    # input files
     if filetype == '.sam':
         sam_file = f"{args.input_file}"
     else:
@@ -356,9 +366,8 @@ if __name__ == "__main__":
 
     # script
     p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
-    log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
-    f = EM_iterations(log_L_rgs, db_ids)
+    log_L_rgs = log_L_rgs_dict(sam_file, p_char, seqid_to_tid_df, remove_cols_dict)
+    f = EM_iterations(log_L_rgs, db_species_tids)
     f_dropped = f_reduce(f, .01)
-    results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full", nodes_path, names_path,
-                                      seq2taxid_path)
-    results_df = f_to_lineage_df(f_dropped, os.path.join(output_dir, filename), nodes_path, names_path, seq2taxid_path)
+    results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full", nodes_df, names_df)
+    results_df = f_to_lineage_df(f_dropped, os.path.join(output_dir, filename), nodes_df, names_df)
