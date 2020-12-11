@@ -139,7 +139,7 @@ def get_char_align_probabilites(sam, remove_n_cols=False):
                 for k, v in cigar_removed_stats.items():
                     read_align_stats[k] -= v
             char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
-    char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X']}
+    char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I']}
     n_char = sum(char_align_stats_primary_oi.values())
     return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}, remove_cols_dict
 
@@ -151,21 +151,22 @@ def compute_log_L_rgs(p_char, cigar_stats):
         cigar_stats: dict of cigar stats to compute
         return: float log(L(r|s)) for sequences r and s in cigar_stats alignment
     """
-    cigar_stats_oi = {k: cigar_stats[k] for k in ['=', 'C', 'X']}
+    cigar_stats_oi = {k: cigar_stats[k] for k in ['=', 'C', 'X', 'I']}
     char_sum = sum(cigar_stats_oi.values())
     value = 0
-    prob_sum = 0
+    #prob_sum = 0
     for char, count in cigar_stats_oi.items():
-        if char not in p_char and cigar_stats_oi[char] > 0:
-            return None
-        elif char in p_char:
-            prob_sum += p_char[char] * cigar_stats_oi[char]
-            value += math.log(p_char[char]) * cigar_stats_oi[char]
-    value += math.log(prob_sum/sum(cigar_stats_oi.values())) * cigar_stats['I']
+        if count > 0:
+            if char not in p_char or p_char[char] == 0:
+                return None
+            else:
+            #prob_sum += p_char[char] * cigar_stats_oi[char]
+                value += math.log(p_char[char]) * count
+    #value += math.log(prob_sum/sum(cigar_stats_oi.values())) * cigar_stats['I']
     return value
 
 
-def log_L_rgs_dict(bwa_sam, p_char, seqid_to_tid_df, remove_cols_dict=None):
+def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
     """dict containing log(L(r|s)) for all pairwise alignments in bwa output
     
         bwa_sam: path to sam file bwa output
@@ -187,15 +188,15 @@ def log_L_rgs_dict(bwa_sam, p_char, seqid_to_tid_df, remove_cols_dict=None):
             val = compute_log_L_rgs(p_char, align_stats)
             data += [align_stats, val]
             ref_name, query_name = alignment.reference_name, alignment.query_name
-            species_tid = seqid_to_tid_df.loc[ref_name]['species_tid']
-            if ((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < val) and val:
+            species_tid = ref_name.split(":")[0]
+            if (val and ((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < val)):
                 log_L_rgs[(query_name, species_tid)] = val
                 data += [species_tid]
             data_cigars.append(data)
         else:
             data_cigars.append([alignment.query_name, "-"])
 
-    df_cigars = pd.DataFrame(data_cigars, columns=['query', 'reference', 'cigar', 'cigar_n_removed', 'score', 'species_tid'])
+    df_cigars = pd.DataFrame(data_cigars, columns=['query', 'reference', 'cigar', 'cigar_n_removed', 'score', 'updated'])
     df_cigars.to_csv("cigar_scores.tsv", sep='\t', index=False)
     return log_L_rgs
 
@@ -246,7 +247,7 @@ def EM_iterations(log_L_rgs, db_ids):
             raise ValueError(f"total_log_likelihood decreased from prior iteration")
 
         # exit loop if small increase
-        if total_log_likelihood - prev_log_likelihood < .01:
+        if total_log_likelihood - prev_log_likelihood < .0001:
             return f
 
 
@@ -322,18 +323,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # initialize values
-    db_tax_path = "rdp16s_db/"
-    names_path = db_tax_path + "ames.dmp"
-    nodes_path = db_tax_path + "nodes.dmp"
-    #seq2taxid_path = db_tax_path + "ncbi16s_seq2tax.map"
-    seqid_to_tid_path = "input/nrdp16s_db/seqid2taxid.map"
+    db_tax_path = "ncbi16s_db/"
+    names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
+    nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
+    #seqid_to_tid_path = db_tax_path + "ncbi16s_seq2tax.map"
+    seqid_to_tid_path = "rrndb/seq2taxid.map"
     #db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
-    db_fasta_path = "input/nrdp16s_db/arch_bac.fna"
+    #db_fasta_path = "input/nrdp16s_db/arch_bac.fna"
 
     # convert taxonomy files to dataframes
     name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
     node_headers = ['tax_id', 'parent_tax_id', 'rank']
-    seqid_to_tid_df = pd.read_csv(seqid_to_tid_path, sep='\t', header=None, names=['seq_id', 'tax_id'], index_col=0)
+    seqid_to_tid_df = pd.read_csv(seqid_to_tid_path, sep='\t', header=None, names=['seq_id', 'tax_id'], index_col=0, dtype=str)
     names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
     names_df.columns = name_headers
     names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
@@ -342,12 +343,12 @@ if __name__ == "__main__":
     nodes_df = nodes_df.set_index("tax_id")
 
     # create species level db df
-    seqid_to_tid_df['name'] = seqid_to_tid_df['tax_id'].apply(lambda x: names_df.loc[str(x)]['name_txt'])
-    seqid_to_tid_df['species_tid'] = seqid_to_tid_df['tax_id'].apply(lambda tid: get_species_tid(tid, nodes_df))
-    db_species_tids = np.unique(seqid_to_tid_df['species_tid'])
+    #seqid_to_tid_df['name'] = seqid_to_tid_df['tax_id'].apply(lambda x: names_df.loc[str(x)]['name_txt'])
+    #seqid_to_tid_df['species_tid'] = seqid_to_tid_df['tax_id'].apply(lambda tid: get_species_tid(tid, nodes_df))
+    db_species_tids = np.unique(seqid_to_tid_df['tax_id'])
 
     # output files
-    output_dir = "results_speciestid/"
+    output_dir = "results_rrn_removedup/"
     if not os.path.exists(output_dir): os.makedirs(output_dir)
     filename = pathlib.PurePath(args.input_file).stem
     filetype = pathlib.PurePath(args.input_file).suffix
@@ -366,8 +367,8 @@ if __name__ == "__main__":
 
     # script
     p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
-    log_L_rgs = log_L_rgs_dict(sam_file, p_char, seqid_to_tid_df, remove_cols_dict)
+    log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
     f = EM_iterations(log_L_rgs, db_species_tids)
     f_dropped = f_reduce(f, .01)
-    results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full", nodes_df, names_df)
-    results_df = f_to_lineage_df(f_dropped, os.path.join(output_dir, filename), nodes_df, names_df)
+    results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full_.0001", nodes_df, names_df)
+    results_df = f_to_lineage_df(f_dropped, f"{os.path.join(output_dir, filename)}_.0001", nodes_df, names_df)
