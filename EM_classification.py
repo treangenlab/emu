@@ -327,7 +327,7 @@ if __name__ == "__main__":
     names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
     nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
     #seqid_to_tid_path = db_tax_path + "ncbi16s_seq2tax.map"
-    seqid_to_tid_path = "rrndb/seq2taxid.map"
+    seqid_to_tid_path = "db_curated/seq2taxid.map"
     #db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
     #db_fasta_path = "input/nrdp16s_db/arch_bac.fna"
 
@@ -348,7 +348,7 @@ if __name__ == "__main__":
     db_species_tids = np.unique(seqid_to_tid_df['tax_id'])
 
     # output files
-    output_dir = "results_rrn_removedup/"
+    output_dir = "results_curateddb/"
     if not os.path.exists(output_dir): os.makedirs(output_dir)
     filename = pathlib.PurePath(args.input_file).stem
     filetype = pathlib.PurePath(args.input_file).suffix
