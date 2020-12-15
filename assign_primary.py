@@ -22,20 +22,30 @@ if __name__ == "__main__":
     db_tax_path = "ncbi16s_db/"
     names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
     nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
-    seq2taxid_path = "input/ncbi16s_zymo_db/ncbi16s_seq2tax.map"
-    seq2tax_df = pd.read_csv(seq2taxid_path, sep='\t', header=None)
-    seq2taxid = dict(zip(seq2tax_df[0], seq2tax_df[1]))
-    seq2taxid['-'] = '-'
+    #seq2taxid_path = "input/ncbi16s_zymo_db/ncbi16s_seq2tax.map"
+    #seq2tax_df = pd.read_csv(seq2taxid_path, sep='\t', header=None)
+    #seq2taxid = dict(zip(seq2tax_df[0], seq2tax_df[1]))
+    #seq2taxid['-'] = '-'
     names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
     names_df = names_df[names_df[6] == "scientific name"]
     tax2name = dict(zip(names_df[0], names_df[2]))
     tax2name['-'] = '-'
     #db_fasta_path = "input/ncbi16s_zymo_db/zymo_assmebled_only.16SrRNA.fna"
-    db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
-    db_ids = [record.id for record in SeqIO.parse(db_fasta_path, "fasta")]
-    output_dir = "results/"
+    #db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
+    #db_ids = [record.id for record in SeqIO.parse(db_fasta_path, "fasta")]
+    output_dir = "results_primary/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+
+    # convert taxonomy files to dataframes
+    name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
+    node_headers = ['tax_id', 'parent_tax_id', 'rank']
+    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
+    names_df.columns = name_headers
+    names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
+    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
+    nodes_df.columns = node_headers
+    nodes_df = nodes_df.set_index("tax_id")
 
     filename = pathlib.PurePath(args.input_file).stem
     filetype = pathlib.PurePath(args.input_file).suffix
@@ -52,15 +62,19 @@ if __name__ == "__main__":
             shell=True)
 
     # initialize
-    n_db = len(db_ids)
-    f_counts = dict.fromkeys(db_ids, 0)
-    assignments = []
+    #n_db = len(db_ids)
+    #f_counts = dict.fromkeys(db_ids, 0)
+    f_counts, assignments = {}, []
 
     # add one count for each primary alignment
     samfile = pysam.AlignmentFile(sam_file)
     for align in samfile.fetch():
         if not align.is_secondary and not align.is_supplementary and align.reference_name:
-            f_counts[align.reference_name] = f_counts[align.reference_name] + 1
+            tid = align.reference_name.split(":")[0]
+            if tid not in f_counts.keys():
+                f_counts[tid] = 1
+            else:
+                f_counts[tid] = f_counts[tid] + 1
             assignments.append([align.query_name, align.reference_name])
         if not align.reference_name:
             assignments.append([align.query_name, "-"])
@@ -69,10 +83,9 @@ if __name__ == "__main__":
     total = sum(f_counts.values())
     f = {k: (v/total) for k, v in f_counts.items() if v > 0}
     df_assignments = pd.DataFrame(assignments, columns=["query", "reference"])
-    df_assignments["tax_id"] = df_assignments["reference"].apply(lambda x: seq2taxid[x])
+    df_assignments["tax_id"] = df_assignments["reference"].apply(lambda x: x.split(":")[0])
     df_assignments["species_name"] = df_assignments["tax_id"].apply(lambda x: tax2name[str(x)])
 
 
-    results_df_full = utils.f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_primary_full", nodes_path, names_path,
-                                      seq2taxid_path)
+    results_df_full = utils.f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_primary_full", nodes_df, names_df)
     df_assignments.to_csv(f"{os.path.join(output_dir, filename)}_primary_assignments.tsv", sep='\t', index=False)
