@@ -269,6 +269,12 @@ def get_species_tid(tid, nodes_df):
         row = nodes_df.loc[str(parent_tid)]
     return row.name
 
+def get_fasta_ids(fasta_path):
+    tids = []
+    for record in SeqIO.parse(fasta_path, "fasta"):
+        tids += [record.id.split(":")[0]]
+    return np.unique(tids)
+
 
 def lineage_dict_from_tid(tid, nodes_df, names_df):
     """get dict of lineage for given taxid
@@ -327,25 +333,26 @@ if __name__ == "__main__":
     names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
     nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
     #seqid_to_tid_path = db_tax_path + "ncbi16s_seq2tax.map"
-    seqid_to_tid_path = "db_curated/seq2taxid.map"
-    #db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
+    #seqid_to_tid_path = "db_curated/seq2taxid.map"
+    db_fasta_path = "db_curated/combined_speciesid_reduced.fasta"
     #db_fasta_path = "input/nrdp16s_db/arch_bac.fna"
 
     # convert taxonomy files to dataframes
     name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
     node_headers = ['tax_id', 'parent_tax_id', 'rank']
-    seqid_to_tid_df = pd.read_csv(seqid_to_tid_path, sep='\t', header=None, names=['seq_id', 'tax_id'], index_col=0, dtype=str)
+    #seqid_to_tid_df = pd.read_csv(seqid_to_tid_path, sep='\t', header=None, names=['seq_id', 'tax_id'], index_col=0, dtype=str)
     names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
     names_df.columns = name_headers
     names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
     nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
     nodes_df.columns = node_headers
     nodes_df = nodes_df.set_index("tax_id")
+    db_species_tids = get_fasta_ids(db_fasta_path)
 
     # create species level db df
     #seqid_to_tid_df['name'] = seqid_to_tid_df['tax_id'].apply(lambda x: names_df.loc[str(x)]['name_txt'])
     #seqid_to_tid_df['species_tid'] = seqid_to_tid_df['tax_id'].apply(lambda tid: get_species_tid(tid, nodes_df))
-    db_species_tids = np.unique(seqid_to_tid_df['tax_id'])
+    #db_species_tids = np.unique(seqid_to_tid_df['tax_id'])
 
     # output files
     output_dir = "results_curateddb/"
@@ -369,6 +376,6 @@ if __name__ == "__main__":
     p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
     log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
     f = EM_iterations(log_L_rgs, db_species_tids)
-    f_dropped = f_reduce(f, .01)
+    f_dropped = f_reduce(f, .0001)
     results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full_.0001", nodes_df, names_df)
     results_df = f_to_lineage_df(f_dropped, f"{os.path.join(output_dir, filename)}_.0001", nodes_df, names_df)
