@@ -28,7 +28,8 @@ def start_clip_length(align):
     """
     if align.cigartuples[0][0] in [4, 5]:
         return align.cigartuples[0][1]
-    return 0
+    else:
+        return 0
 
 
 def get_n_locs(align):
@@ -201,16 +202,18 @@ def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
     return log_L_rgs
 
 
-def EM_iterations(log_L_rgs, db_ids):
+def EM_iterations(log_L_rgs, db_ids, threshold=.01):
     """Expectation maximization algorithm for alignments in log_L_rgs dict
         
         log_L_rgs: dict[(r,s)]=log(L(r|s))
         db_ids: array of ids in database
-        n_reads: int number of reads in input sequence (|R|)
-        return: composition vector f[s]=relative abundance of s from sequence database 
+        threshold: log likelihood increase minimum to continue EM iterations
+
+        return: composition vector f[s]=relative abundance of s from sequence database
     """
     n_db = len(db_ids)
     f = dict.fromkeys(db_ids, 1 / n_db)
+    counter = 1
 
     total_log_likelihood = -math.inf
     while (True):
@@ -246,30 +249,67 @@ def EM_iterations(log_L_rgs, db_ids):
         if log_likelihood_diff < 0:
             raise ValueError(f"total_log_likelihood decreased from prior iteration")
 
-        # exit loop if small increase
-        if total_log_likelihood - prev_log_likelihood < .0001:
+        # exit loop if log likelihood increase less than threshold
+        if total_log_likelihood - prev_log_likelihood < threshold:
+            print(f"Number of EM iterations: {counter}")
             return f
 
+        counter += 1
 
-def f_reduce(f, threshold):
-    """reduce composition vector f to only those with value > threshold, then normalize
-    
-        f: composition vector 
-        threshold: float to cut off value
-        return: array of reduced composition vector
+
+def create_nodes_df(nodes_path):
+    """convert nodes.dmp file into pandas dataframe
+
+        nodes_path (str):
+
+        returns (df):
     """
-    f_dropped = {k: v for k, v in f.items() if v > threshold}
-    f_total = sum(f_dropped.values())
-    return {k: v / f_total for k, v in f_dropped.items()}
+    node_headers = ['tax_id', 'parent_tax_id', 'rank']
+    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
+    nodes_df.columns = node_headers
+    nodes_df = nodes_df.set_index("tax_id")
+    return nodes_df
+
+
+def create_names_df(names_path):
+    """convert names.dmp file into pandas dataframe
+
+        names_path (str):
+
+        returns (df):
+    """
+    name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
+    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
+    names_df.columns = name_headers
+    names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
+    return names_df
+
 
 def get_species_tid(tid, nodes_df):
+    """ Get species level taxid in linegage for taxid [tid]
+
+        tid (int): taxid for species level or more specific
+
+        return (int): species taxid in lineage
+    """
+    if str(tid) not in nodes_df.index:
+        raise ValueError(f"Taxid:{tid} not found in nodes file")
     row = nodes_df.loc[str(tid)]
     while row['rank'] != 'species':
         parent_tid = row['parent_tax_id']
         row = nodes_df.loc[str(parent_tid)]
+        if row['rank'] == 'superkingdom':
+            raise ValueError(f"No species tax id for taxid:{tid}")
     return row.name
 
+
 def get_fasta_ids(fasta_path):
+    """ Returns list of unique ids in fasta [fasta_path]
+
+        fasta_path (str): path to database fasta
+
+        returns (list): list of unique ids (str) in fasta
+    """
     tids = []
     for record in SeqIO.parse(fasta_path, "fasta"):
         tids += [record.id.split(":")[0]]
@@ -284,6 +324,7 @@ def lineage_dict_from_tid(tid, nodes_df, names_df):
     names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt','unique_name', 'name_class'] with tax_id as index
     return(dict): [taxonomy rank]:name
     """
+
     lineage_dict = {}
     rank = None
     while rank != "superkingdom":
@@ -304,6 +345,7 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
         nodes_path (str): string path to nodes.dmp from ncbi taxonomy dump
         names_path (str): string path to names.dmp from ncbi taxonomy dump
         seq2taxid_path (str): string path to tab separated file of seqid and taxids
+
         returns (df): pandas df with lineage and abundances for values in f
     """
 
@@ -320,44 +362,74 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
     return results_df
 
 
-if __name__ == "__main__":
+def f_reduce(f, threshold):
+    """reduce composition vector f to only those with value > threshold, then normalize
 
+        f: composition vector
+        threshold: float to cut off value
+        return: array of reduced composition vector
+    """
+
+    f_dropped = {k: v for k, v in f.items() if v > threshold}
+    f_total = sum(f_dropped.values())
+    return {k: v / f_total for k, v in f_dropped.items()}
+
+
+def df_reduce(results_df, threshold):
+    """
+    reduce results dataframe [results_df] to only those with value > [threshold], then normalize
+        results_df (df):
+        threshold (float): minimum abundance to keep in results
+
+    returns (df): pandas df with lineage and abundances for values in f
+    """
+
+    df_reduced = results_df[results_df['abundance'] >= threshold].reset_index(drop=True)
+    total = df_reduced['abundance'].sum()
+    df_reduced['abundance'] = df_reduced['abundance'].apply(lambda val: val/total)
+    return df_reduced
+
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'input_file', type=str,
         help='filepath to input [fasta,fastq,sam]')
+    parser.add_argument(
+        '--lli', '-l', type=float, default=0.01,
+        help='min log likelihood increase to continue EM iterations [0.01]')
+    parser.add_argument(
+        '--threshold', '-t', type=float, default=0.001,
+        help='min species abundance in results [0.0001]')
+    parser.add_argument(
+        '--names', type=str, default="NCBI_taxonomy/names.dmp",
+        help='path to names.dmp')
+    parser.add_argument(
+        '--nodes', type=str, default="NCBI_taxonomy/nodes.dmp",
+        help='path to nodes.dmp')
+    parser.add_argument(
+        '--db', type=str, default="db_combined/combined_tid.fasta",
+        help='path to fasta file of database sequences')
+    parser.add_argument(
+        '--output', '-o', type=str,
+        help='output filename')
+    parser.add_argument(
+        '--output_dir', type=str, default="results_combineddb/",
+        help='output directory name')
     args = parser.parse_args()
 
-    # initialize values
-    db_tax_path = "ncbi16s_db/"
-    names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
-    nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
-    #seqid_to_tid_path = db_tax_path + "ncbi16s_seq2tax.map"
-    #seqid_to_tid_path = "db_curated/seq2taxid.map"
-    db_fasta_path = "db_curated/combined_speciesid_reduced.fasta"
-    #db_fasta_path = "input/nrdp16s_db/arch_bac.fna"
-
     # convert taxonomy files to dataframes
-    name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
-    node_headers = ['tax_id', 'parent_tax_id', 'rank']
-    #seqid_to_tid_df = pd.read_csv(seqid_to_tid_path, sep='\t', header=None, names=['seq_id', 'tax_id'], index_col=0, dtype=str)
-    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
-    names_df.columns = name_headers
-    names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
-    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
-    nodes_df.columns = node_headers
-    nodes_df = nodes_df.set_index("tax_id")
-    db_species_tids = get_fasta_ids(db_fasta_path)
-
-    # create species level db df
-    #seqid_to_tid_df['name'] = seqid_to_tid_df['tax_id'].apply(lambda x: names_df.loc[str(x)]['name_txt'])
-    #seqid_to_tid_df['species_tid'] = seqid_to_tid_df['tax_id'].apply(lambda tid: get_species_tid(tid, nodes_df))
-    #db_species_tids = np.unique(seqid_to_tid_df['tax_id'])
+    nodes_df = create_nodes_df(args.nodes)
+    names_df = create_names_df(args.names)
+    db_species_tids = get_fasta_ids(args.db) ##check for leptum?
 
     # output files
-    output_dir = "results_curateddb/"
-    if not os.path.exists(output_dir): os.makedirs(output_dir)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
     filename = pathlib.PurePath(args.input_file).stem
+    if args.output:
+        filename = args.output
     filetype = pathlib.PurePath(args.input_file).suffix
     pwd = os.getcwd()
 
@@ -365,17 +437,17 @@ if __name__ == "__main__":
     if filetype == '.sam':
         sam_file = f"{args.input_file}"
     else:
-        sam_file = os.path.join(output_dir, f"{filename}.sam")
+        sam_file = os.path.join(args._dir, f"{filename}.sam")
         pwd = os.getcwd()
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t 40 -N 100 --eqx --cs ncbi16s_db/bacteria_and_archaea.16SrRNA.fna {args.input_file} -o {sam_file}",
-            # f"bwa mem -a -x ont2d {pwd}/ncbi16s_db/bwa_dbs/ncbi_16s {args.input_file} > {sam_file}",
+            f"minimap2 -x map-ont -ac -t 40 -N 1000 --cs --eqx {args.db} {args.input_file} -o {sam_file}",
             shell=True)
 
     # script
     p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
     log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
-    f = EM_iterations(log_L_rgs, db_species_tids)
-    f_dropped = f_reduce(f, .0001)
-    results_df_full = f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_full_.0001", nodes_df, names_df)
-    results_df = f_to_lineage_df(f_dropped, f"{os.path.join(output_dir, filename)}_.0001", nodes_df, names_df)
+    f = EM_iterations(log_L_rgs, db_species_tids, args.lli)
+    results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}", nodes_df, names_df)
+    results_df = df_reduce(results_df_full, args.threshold)
+    results_df.to_csv(f"{os.path.join(args.output_dir, filename)}_{args.lli}.tsv", index=False, sep='\t')
+
