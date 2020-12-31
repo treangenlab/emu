@@ -140,7 +140,7 @@ def get_char_align_probabilites(sam, remove_n_cols=False):
                 for k, v in cigar_removed_stats.items():
                     read_align_stats[k] -= v
             char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
-    char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I']}
+    char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I', 'D']}
     n_char = sum(char_align_stats_primary_oi.values())
     return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}, remove_cols_dict
 
@@ -152,18 +152,15 @@ def compute_log_L_rgs(p_char, cigar_stats):
         cigar_stats: dict of cigar stats to compute
         return: float log(L(r|s)) for sequences r and s in cigar_stats alignment
     """
-    cigar_stats_oi = {k: cigar_stats[k] for k in ['=', 'C', 'X', 'I']}
+    cigar_stats_oi = {k: cigar_stats[k] for k in ['C', 'X', 'I', 'D']}
     char_sum = sum(cigar_stats_oi.values())
-    value = 0
-    #prob_sum = 0
+    value = 1
     for char, count in cigar_stats_oi.items():
         if count > 0:
             if char not in p_char or p_char[char] == 0:
                 return None
             else:
-            #prob_sum += p_char[char] * cigar_stats_oi[char]
                 value += math.log(p_char[char]) * count
-    #value += math.log(prob_sum/sum(cigar_stats_oi.values())) * cigar_stats['I']
     return value
 
 
@@ -415,7 +412,7 @@ if __name__ == "__main__":
         '--output', '-o', type=str,
         help='output filename')
     parser.add_argument(
-        '--output_dir', type=str, default="results_combineddb/",
+        '--output_dir', type=str, default="results_combineddb_removematch/",
         help='output directory name')
     args = parser.parse_args()
 
@@ -427,7 +424,7 @@ if __name__ == "__main__":
     # output files
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    filename = pathlib.PurePath(args.input_file).stem
+    filename = f"{pathlib.PurePath(args.input_file).stem}_removematch"
     if args.output:
         filename = args.output
     filetype = pathlib.PurePath(args.input_file).suffix
@@ -440,7 +437,7 @@ if __name__ == "__main__":
         sam_file = os.path.join(args._dir, f"{filename}.sam")
         pwd = os.getcwd()
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t 40 -N 1000 --cs --eqx {args.db} {args.input_file} -o {sam_file}",
+            f"minimap2 -x map-ont -ac -t 40 -N 1000 -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
             shell=True)
 
     # script
