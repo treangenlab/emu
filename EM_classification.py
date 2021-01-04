@@ -142,6 +142,7 @@ def get_char_align_probabilites(sam, remove_n_cols=False):
             char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
     char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I', 'D']}
     n_char = sum(char_align_stats_primary_oi.values())
+    penalty = (n_char['C']+n_char['I']+n_char['D']+n_char['X'])/n_char("=")
     return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}, remove_cols_dict
 
 
@@ -152,9 +153,9 @@ def compute_log_L_rgs(p_char, cigar_stats):
         cigar_stats: dict of cigar stats to compute
         return: float log(L(r|s)) for sequences r and s in cigar_stats alignment
     """
-    cigar_stats_oi = {k: cigar_stats[k] for k in ['C', 'X', 'I', 'D']}
+    cigar_stats_oi = {k: cigar_stats[k] for k in ['C', 'X', 'I', '=']}
     char_sum = sum(cigar_stats_oi.values())
-    value = 1
+    value = 0
     for char, count in cigar_stats_oi.items():
         if count > 0:
             if char not in p_char or p_char[char] == 0:
@@ -199,7 +200,7 @@ def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
     return log_L_rgs
 
 
-def EM_iterations(log_L_rgs, db_ids, threshold=.01):
+def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
     """Expectation maximization algorithm for alignments in log_L_rgs dict
         
         log_L_rgs: dict[(r,s)]=log(L(r|s))
@@ -250,6 +251,8 @@ def EM_iterations(log_L_rgs, db_ids, threshold=.01):
         if total_log_likelihood - prev_log_likelihood < threshold:
             print(f"Number of EM iterations: {counter}")
             return f
+
+        f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}_{counter}", nodes_df, names_df)
 
         counter += 1
 
@@ -412,7 +415,7 @@ if __name__ == "__main__":
         '--output', '-o', type=str,
         help='output filename')
     parser.add_argument(
-        '--output_dir', type=str, default="results_combineddb_removematch/",
+        '--output_dir', type=str, default="results_combineddb_removedel/",
         help='output directory name')
     args = parser.parse_args()
 
@@ -424,7 +427,7 @@ if __name__ == "__main__":
     # output files
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    filename = f"{pathlib.PurePath(args.input_file).stem}_removematch"
+    filename = f"{pathlib.PurePath(args.input_file).stem}_removedel"
     if args.output:
         filename = args.output
     filetype = pathlib.PurePath(args.input_file).suffix
@@ -434,7 +437,7 @@ if __name__ == "__main__":
     if filetype == '.sam':
         sam_file = f"{args.input_file}"
     else:
-        sam_file = os.path.join(args._dir, f"{filename}.sam")
+        sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         pwd = os.getcwd()
         subprocess.check_output(
             f"minimap2 -x map-ont -ac -t 40 -N 1000 -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
@@ -443,7 +446,7 @@ if __name__ == "__main__":
     # script
     p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
     log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
-    f = EM_iterations(log_L_rgs, db_species_tids, args.lli)
+    f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df)
     results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}", nodes_df, names_df)
     results_df = df_reduce(results_df_full, args.threshold)
     results_df.to_csv(f"{os.path.join(args.output_dir, filename)}_{args.lli}.tsv", index=False, sep='\t')
