@@ -189,9 +189,11 @@ def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
             data += [align_stats, val]
             ref_name, query_name = alignment.reference_name, alignment.query_name
             species_tid = ref_name.split(":")[0]
-            if (val and ((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < val)):
+            if (val != None and ((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < val)):
                 log_L_rgs[(query_name, species_tid)] = val
                 data += [species_tid]
+            else:
+                data += ['']
             data_cigars.append(data)
         else:
             data_cigars.append([alignment.query_name, "-"])
@@ -359,6 +361,9 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
     header_order = ["abundance", "species", "genus", "family", "order", "class",
                     "phylum", "clade", "superkingdom", "strain", "subspecies",
                     "species subgroup", "species group", "tax_id"]
+    for col in header_order:
+        if col not in results_df.columns:
+            results_df[col] = ""
     results_df = results_df.sort_values(header_order[8:0:-1]).reset_index(drop=True)
     results_df = results_df.reindex(header_order, axis=1)
 
@@ -413,6 +418,9 @@ if __name__ == "__main__":
         '--nodes', type=str, default="NCBI_taxonomy/nodes.dmp",
         help='path to nodes.dmp')
     parser.add_argument(
+        '--threads', type=int, default=40,
+        help='threads utilized by minimap')
+    parser.add_argument(
         '--db', type=str, default="db_combined/combined_tid.fasta",
         help='path to fasta file of database sequences')
     parser.add_argument(
@@ -444,7 +452,7 @@ if __name__ == "__main__":
         sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         pwd = os.getcwd()
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t 40 -N 1000 -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
+            f"minimap2 -x map-ont -ac -t {args.threads} -N 1000 -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
             shell=True)
 
     # script
