@@ -142,7 +142,8 @@ def get_char_align_probabilites(sam, remove_n_cols=False):
             char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
     char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I', 'D']}
     n_char = sum(char_align_stats_primary_oi.values())
-    penalty = (n_char['C']+n_char['I']+n_char['D']+n_char['X'])/n_char("=")
+    #penalty = (n_char['C']+n_char['I']+n_char['D']+n_char['X'])/n_char["="]
+    #return {char: .1 for char in char_align_stats_primary_oi.keys()}, remove_cols_dict
     return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}, remove_cols_dict
 
 
@@ -211,6 +212,7 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
     """
     n_db = len(db_ids)
     f = dict.fromkeys(db_ids, 1 / n_db)
+    f_thresh = min(1 / n_db, .000001)
     counter = 1
 
     total_log_likelihood = -math.inf
@@ -234,7 +236,9 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
         total_log_likelihood = sum(log_L_r.values())
         f = {s: (sum(r_map.values()) / n_reads) for s, r_map in L_sgr.items()}
 
-        print("*****ITERATION*****")
+        #f = {k:v for k,v in f.items() if v > f_thresh}
+
+        print(f"*****ITERATION:{counter}*****")
         print(total_log_likelihood)
 
         # check f vector sums to 1
@@ -248,7 +252,7 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
             raise ValueError(f"total_log_likelihood decreased from prior iteration")
 
         # exit loop if log likelihood increase less than threshold
-        if total_log_likelihood - prev_log_likelihood < threshold:
+        if log_likelihood_diff < threshold:
             print(f"Number of EM iterations: {counter}")
             return f
 
@@ -397,7 +401,7 @@ if __name__ == "__main__":
         'input_file', type=str,
         help='filepath to input [fasta,fastq,sam]')
     parser.add_argument(
-        '--lli', '-l', type=float, default=0.01,
+        '--lli', '-l', type=float, default=0.00001,
         help='min log likelihood increase to continue EM iterations [0.01]')
     parser.add_argument(
         '--threshold', '-t', type=float, default=0.001,
@@ -415,19 +419,19 @@ if __name__ == "__main__":
         '--output', '-o', type=str,
         help='output filename')
     parser.add_argument(
-        '--output_dir', type=str, default="results_combineddb_removedel/",
+        '--output_dir', type=str, default="results_combineddb_removedels/",
         help='output directory name')
     args = parser.parse_args()
 
     # convert taxonomy files to dataframes
     nodes_df = create_nodes_df(args.nodes)
     names_df = create_names_df(args.names)
-    db_species_tids = get_fasta_ids(args.db) ##check for leptum?
+    db_species_tids = get_fasta_ids(args.db)
 
     # output files
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    filename = f"{pathlib.PurePath(args.input_file).stem}_removedel"
+    filename = f"{pathlib.PurePath(args.input_file).stem}"
     if args.output:
         filename = args.output
     filetype = pathlib.PurePath(args.input_file).suffix
