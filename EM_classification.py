@@ -214,8 +214,7 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
     """
     n_db = len(db_ids)
     f = dict.fromkeys(db_ids, 1 / n_db)
-    f_thresh = min(1 / n_db, .000001)
-    counter = 1
+    counter, break_flag = 1, False
 
     total_log_likelihood = -math.inf
     while (True):
@@ -238,8 +237,6 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
         total_log_likelihood = sum(log_L_r.values())
         f = {s: (sum(r_map.values()) / n_reads) for s, r_map in L_sgr.items()}
 
-        #f = {k:v for k,v in f.items() if v > f_thresh}
-
         print(f"*****ITERATION:{counter}*****")
         print(total_log_likelihood)
 
@@ -248,6 +245,10 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
         if not (.999 <= f_sum <= 1.0001):
             raise ValueError(f"f sums to {f_sum}, rather than 1")
 
+        if break_flag:
+            print(f"Number of EM iterations: {counter}")
+            return f
+
         # confirm log likelihood increase
         log_likelihood_diff = total_log_likelihood - prev_log_likelihood
         if log_likelihood_diff < 0:
@@ -255,10 +256,12 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
 
         # exit loop if log likelihood increase less than threshold
         if log_likelihood_diff < threshold:
-            print(f"Number of EM iterations: {counter}")
-            return f
+            f_thresh = 1/n_reads
+            f = {k: v for k, v in f.items() if v > f_thresh}
+            break_flag = True
 
-        f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}_{counter}", nodes_df, names_df)
+        #f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}_{counter}", nodes_df, names_df)
+        f_to_lineage_df_lineage_txt(f,f"{os.path.join(args.output_dir, filename)}_{args.lli}_{counter}")
 
         counter += 1
 
@@ -370,6 +373,15 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
     results_df.to_csv(f"{tsv_output_name}.tsv", index=False, sep='\t')
     return results_df
 
+def f_to_lineage_df_lineage_txt(f, tsv_output_name):
+    results_df = pd.DataFrame(list(zip(f.keys(), f.values())), columns=["tax_id", "abundance"])
+    taxid_df = pd.read_csv("./db_ezbiocloud/ezbiocloud_id_taxonomy.txt", names=['id', 'lineage'], sep="\t")
+    lineage_dict = dict(zip(taxid_df['id'], taxid_df['lineage']))
+    results_df['lineage'] = results_df['tax_id'].apply(lambda id: lineage_dict[int(id)])
+    results_df.to_csv(f"{tsv_output_name}.tsv", index=False, sep='\t')
+    return results_df
+
+
 
 def f_reduce(f, threshold):
     """reduce composition vector f to only those with value > threshold, then normalize
@@ -421,13 +433,13 @@ if __name__ == "__main__":
         '--threads', type=int, default=40,
         help='threads utilized by minimap')
     parser.add_argument(
-        '--db', type=str, default="db_combined/combined_tid.fasta",
+        '--db', type=str, default="db_ezbiocloud/ezbiocloud_qiime_full_grouped.fasta",
         help='path to fasta file of database sequences')
     parser.add_argument(
         '--output', '-o', type=str,
         help='output filename')
     parser.add_argument(
-        '--output_dir', type=str, default="results_combineddb_removedels/",
+        '--output_dir', type=str, default="results_ezcloudbio_combineddb_removedels_cutoff/",
         help='output directory name')
     args = parser.parse_args()
 
@@ -459,7 +471,8 @@ if __name__ == "__main__":
     p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
     log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
     f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df)
-    results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}", nodes_df, names_df)
+    #results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}", nodes_df, names_df)
+    results_df_full = f_to_lineage_df_lineage_txt(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}")
     results_df = df_reduce(results_df_full, args.threshold)
     results_df.to_csv(f"{os.path.join(args.output_dir, filename)}_{args.lli}.tsv", index=False, sep='\t')
 
