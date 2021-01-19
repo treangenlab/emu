@@ -258,7 +258,7 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
         # exit loop if log likelihood increase less than threshold
         if log_likelihood_diff < threshold:
             f_thresh = 1/n_reads
-            f = {k: v for k, v in f.items() if v > f_thresh}
+            f = {k: v for k, v in f.items() if v >= f_thresh}
             break_flag = True
 
         dir = f"{os.path.join(args.output_dir, filename)}_{args.lli}_iterations"
