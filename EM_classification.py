@@ -421,10 +421,10 @@ if __name__ == "__main__":
         'input_file', type=str,
         help='filepath to input [fasta,fastq,sam]')
     parser.add_argument(
-        '--lli', '-l', type=float, default=0.01,
-        help='min log likelihood increase to continue EM iterations [0.01]')
+        '--lli', '-l', type=float, default=0.1,
+        help='min log likelihood increase to continue EM iterations [0.1]')
     parser.add_argument(
-        '--threshold', '-t', type=float, default=0.001,
+        '--threshold', '-t', type=float, default=0.0001,
         help='min species abundance in results [0.0001]')
     parser.add_argument(
         '--names', type=str, default="NCBI_taxonomy/names.dmp",
