@@ -128,9 +128,11 @@ def get_char_align_probabilites(sam, remove_n_cols=False):
     if remove_n_cols:
         remove_cols_dict = create_n_cols_query_dict(sam)
     readlist, char_align_stats_primary = [], {}
+    count = 0
     samfile = pysam.AlignmentFile(sam)
     for read in samfile.fetch():
         if not read.is_secondary and not read.is_supplementary:
+            count += 1
             if read.query_name in readlist:
                 print("ERROR!!")
             readlist += [read.query_name]
@@ -155,7 +157,6 @@ def compute_log_L_rgs(p_char, cigar_stats):
         return: float log(L(r|s)) for sequences r and s in cigar_stats alignment
     """
     cigar_stats_oi = {k: cigar_stats[k] for k in ['C', 'X', 'I', '=']}
-    char_sum = sum(cigar_stats_oi.values())
     value = 0
     for char, count in cigar_stats_oi.items():
         if count > 0:
@@ -260,9 +261,11 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
             f = {k: v for k, v in f.items() if v > f_thresh}
             break_flag = True
 
-        #f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}_{counter}", nodes_df, names_df)
-        f_to_lineage_df_lineage_txt(f,f"{os.path.join(args.output_dir, filename)}_{args.lli}_{counter}")
-
+        dir = f"{os.path.join(args.output_dir, filename)}_{args.lli}_iterations"
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        f_to_lineage_df(f, f"{dir}/{counter}", nodes_df, names_df)
+        #f_to_lineage_df_lineage_txt(f,f"{os.path.join(args.output_dir, filename)}_{args.lli}_{counter}")
         counter += 1
 
 
@@ -418,7 +421,7 @@ if __name__ == "__main__":
         'input_file', type=str,
         help='filepath to input [fasta,fastq,sam]')
     parser.add_argument(
-        '--lli', '-l', type=float, default=0.00001,
+        '--lli', '-l', type=float, default=0.01,
         help='min log likelihood increase to continue EM iterations [0.01]')
     parser.add_argument(
         '--threshold', '-t', type=float, default=0.001,
@@ -433,13 +436,13 @@ if __name__ == "__main__":
         '--threads', type=int, default=40,
         help='threads utilized by minimap')
     parser.add_argument(
-        '--db', type=str, default="db_ezbiocloud/ezbiocloud_qiime_full_grouped.fasta",
+        '--db', type=str, default="db_combined/combined_tid.fasta",
         help='path to fasta file of database sequences')
     parser.add_argument(
         '--output', '-o', type=str,
         help='output filename')
     parser.add_argument(
-        '--output_dir', type=str, default="results_ezcloudbio_combineddb_removedels_cutoff/",
+        '--output_dir', type=str, default="results_combineddb_removedels_1readcutoff/",
         help='output directory name')
     args = parser.parse_args()
 
@@ -471,8 +474,8 @@ if __name__ == "__main__":
     p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
     log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
     f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df)
-    #results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}", nodes_df, names_df)
-    results_df_full = f_to_lineage_df_lineage_txt(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}")
+    results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}", nodes_df, names_df)
+    #results_df_full = f_to_lineage_df_lineage_txt(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}")
     results_df = df_reduce(results_df_full, args.threshold)
     results_df.to_csv(f"{os.path.join(args.output_dir, filename)}_{args.lli}.tsv", index=False, sep='\t')
 
