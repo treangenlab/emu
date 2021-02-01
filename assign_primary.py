@@ -6,8 +6,36 @@ import pathlib
 import pandas as pd
 
 import pysam
-from Bio import SeqIO
 import EM_classification as utils
+
+
+def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
+    """converts composition vector f to a pandas df where each row contains abundance and
+        tax lineage for each classified species.
+        Stores df as .tsv file in tsv_output_name.
+
+        f (arr): composition vector with keys database sequnce names for abundace output
+        tsv_output_name (str): name of output .tsv file of generated dataframe
+        nodes_path (str): string path to nodes.dmp from ncbi taxonomy dump
+        names_path (str): string path to names.dmp from ncbi taxonomy dump
+        seq2taxid_path (str): string path to tab separated file of seqid and taxids
+
+        returns (df): pandas df with lineage and abundances for values in f
+    """
+
+    results_df = pd.DataFrame(list(zip(f.keys(), f.values())), columns=["tax_id", "counts"])
+    lineages = results_df["tax_id"].apply(lambda x: utils.lineage_dict_from_tid(str(x), nodes_df, names_df))
+    results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
+    header_order = ["counts", "species", "genus", "family", "order", "class",
+                    "phylum", "clade", "superkingdom", "strain", "subspecies",
+                    "species subgroup", "species group", "tax_id"]
+    for col in header_order:
+        if col not in results_df.columns:
+            results_df[col] = ""
+    results_df = results_df.sort_values(header_order[8:0:-1]).reset_index(drop=True)
+    results_df = results_df.reindex(header_order, axis=1)
+
+    return results_df
 
 
 if __name__ == "__main__":
@@ -15,25 +43,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'input_file', type=str,
-        help='filepath to input [fasta,fastq,sam]')
+        help='filepath to input [sam]')
     args = parser.parse_args()
 
     # initialize values
-    db_tax_path = "ncbi16s_db/"
-    names_path = db_tax_path + "NCBI_taxonomy/names.dmp"
-    nodes_path = db_tax_path + "NCBI_taxonomy/nodes.dmp"
-    #seq2taxid_path = "input/ncbi16s_zymo_db/ncbi16s_seq2tax.map"
-    #seq2tax_df = pd.read_csv(seq2taxid_path, sep='\t', header=None)
-    #seq2taxid = dict(zip(seq2tax_df[0], seq2tax_df[1]))
-    #seq2taxid['-'] = '-'
+    names_path = "./NCBI_taxonomy/names.dmp"
+    nodes_path = "./NCBI_taxonomy/nodes.dmp"
     names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
     names_df = names_df[names_df[6] == "scientific name"]
     tax2name = dict(zip(names_df[0], names_df[2]))
     tax2name['-'] = '-'
-    #db_fasta_path = "input/ncbi16s_zymo_db/zymo_assmebled_only.16SrRNA.fna"
-    #db_fasta_path = "ncbi16s_db/bacteria_and_archaea.16SrRNA.fna"
-    #db_ids = [record.id for record in SeqIO.parse(db_fasta_path, "fasta")]
-    output_dir = "results_primary/"
+    output_dir = "./"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -51,41 +71,42 @@ if __name__ == "__main__":
     filetype = pathlib.PurePath(args.input_file).suffix
     pwd = os.getcwd()
 
-    if filetype == '.sam':
-        sam_file = f"{args.input_file}"
-    else:
-        sam_file = os.path.join(output_dir, f"{filename}.sam")
-        pwd = os.getcwd()
-        subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t 40 -N 100 --eqx --cs {db_fasta_path} {args.input_file} -o {sam_file}",
-            # f"bwa mem -a -x ont2d {pwd}/ncbi16s_db/bwa_dbs/ncbi_16s {args.input_file} > {sam_file}",
-            shell=True)
+    if filetype != '.sam':
+        raise ValueError("Input file must be of type <.sam>")
+
+    sam_file = f"{args.input_file}"
 
     # initialize
-    #n_db = len(db_ids)
-    #f_counts = dict.fromkeys(db_ids, 0)
     f_counts, assignments = {}, []
+    unassigned_count = 0
 
     # add one count for each primary alignment
     samfile = pysam.AlignmentFile(sam_file)
     for align in samfile.fetch():
-        if not align.is_secondary and not align.is_supplementary and align.reference_name:
+        if not align.reference_name:
+            assignments.append([align.query_name, "-"])
+            unassigned_count += 1
+        elif not align.is_secondary and not align.is_supplementary:
             tid = align.reference_name.split(":")[0]
             if tid not in f_counts.keys():
                 f_counts[tid] = 1
             else:
                 f_counts[tid] = f_counts[tid] + 1
             assignments.append([align.query_name, align.reference_name])
-        if not align.reference_name:
-            assignments.append([align.query_name, "-"])
 
     # convert counts to percentage
     total = sum(f_counts.values())
-    f = {k: (v/total) for k, v in f_counts.items() if v > 0}
+    total_with_unassigned = total + unassigned_count
+    #f = {k: (v/total) for k, v in f_counts.items() if v > 0}
+    results_df_full = f_to_lineage_df(f_counts, f"{os.path.join(output_dir, filename)}_primary_full", nodes_df, names_df)
+    results_df_full['abundance'] = results_df_full['counts'].apply(lambda x: x/total)
+    results_df_full = results_df_full.append(pd.DataFrame({"counts": [unassigned_count],
+                                                           "species": ["unclassified"],
+                                                           "genus":["unclassified"]}), ignore_index=True)
+    results_df_full['abundance with unassigned'] = results_df_full['counts'].apply(lambda x: x / total_with_unassigned)
+    results_df_full.to_csv(f"{os.path.join(output_dir, filename)}_truth.tsv", sep='\t', index=False)
+
     df_assignments = pd.DataFrame(assignments, columns=["query", "reference"])
     df_assignments["tax_id"] = df_assignments["reference"].apply(lambda x: x.split(":")[0])
     df_assignments["species_name"] = df_assignments["tax_id"].apply(lambda x: tax2name[str(x)])
-
-
-    results_df_full = utils.f_to_lineage_df(f, f"{os.path.join(output_dir, filename)}_primary_full", nodes_df, names_df)
     df_assignments.to_csv(f"{os.path.join(output_dir, filename)}_primary_assignments.tsv", sep='\t', index=False)
