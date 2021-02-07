@@ -10,7 +10,6 @@ import os
 import argparse
 import pathlib
 import subprocess
-import re
 
 import math
 import pysam
@@ -20,84 +19,6 @@ from collections import Counter
 from flatten_dict import unflatten
 from Bio import SeqIO
 
-
-def start_clip_length(align):
-    """align: pysam alignment
-    
-        return: int of starting clip length
-    """
-    if align.cigartuples[0][0] in [4, 5]:
-        return align.cigartuples[0][1]
-    else:
-        return 0
-
-
-def get_n_locs(align):
-    """align: pysam alignment
-        
-        return: list of positions in query which align to ambiguous base
-    """
-    n_cols = []
-    if align.has_tag("cs"):
-        i = start_clip_length(align)
-        cs_list = re.findall(r'([+*:-]{1})(\w+)', align.get_tag("cs"))
-        for (k, v) in cs_list:
-            if k == ":":
-                i += int(v)
-            elif k == "+":
-                i += len(v)
-            elif k == "*":
-                if "n" in v: n_cols += [i]
-                i += 1
-    return n_cols
-
-
-def create_n_cols_query_dict(sam):
-    """sam: path to samfile
-    
-        return: dict[query] = set of positions which align to ambiguous base
-    """
-    samfile = pysam.AlignmentFile(sam)
-    n_cols_dict = {}
-    for align in samfile.fetch():
-        if align.query_name not in n_cols_dict:
-            n_cols_dict[align.query_name] = set()
-        if align.reference_name:
-            n_match_list = get_n_locs(align)
-            if n_match_list:
-                n_cols_dict[align.query_name] = n_cols_dict[align.query_name].union(set(n_match_list))
-    return n_cols_dict
-
-
-def cigar_to_remove(align, n_cols_dict):
-    """align: pysam alignment
-        n_cols_dict: dict[query] = set of positions which align to ambiguous base
-        
-        return: dict of cigar stats for alignment at positions in n_cols_dict
-    """
-    cols_remove = sorted(n_cols_dict[align.query_name]) + [None]
-    col_to_remove = cols_remove.pop(0)
-    cigar_removed = dict.fromkeys([":", "+", "*"], 0)
-    if align.has_tag("cs"):
-        i = start_clip_length(align)
-        cs_list = re.findall(r'([+*:-]{1})(\w+)', align.get_tag("cs"))
-        for (k, v) in cs_list:
-            if not col_to_remove:
-                break
-            if k == ":":
-                i += int(v)
-            elif k == "+":
-                i += len(v)
-            elif k == "*":
-                i += 1
-            while col_to_remove < i:
-                cigar_removed[k] += 1
-                col_to_remove = cols_remove.pop(0)
-                if not col_to_remove: break
-    cs_to_cigar_map = {"+": "I", "*": "X", ":": "="}
-    for k, v in cs_to_cigar_map.items():
-        cigar_removed[v] = cigar_removed.pop(k)
-    return cigar_removed
 
 
 def get_align_stats(alignment):
@@ -115,7 +36,7 @@ def get_align_stats(alignment):
     return char_align_stats
 
 
-def get_char_align_probabilites(sam, remove_n_cols=False):
+def get_char_align_probabilites(sam):
     """P(match), P(mismatch), P(insertion), P(deletion), P(clipping),
         by counting how often the corresponding operations occur in the primary alignments
         and by normalizing over the total sum of operations
@@ -123,30 +44,15 @@ def get_char_align_probabilites(sam, remove_n_cols=False):
         sam: path to sam file bwa output
         return: dict of likelihood for each cigar output with prob > 0
     """
-    # initialize character alignment probabilities
-    remove_cols_dict = None
-    if remove_n_cols:
-        remove_cols_dict = create_n_cols_query_dict(sam)
-    readlist, char_align_stats_primary = [], {}
-    count = 0
+    char_align_stats_primary = {}
     samfile = pysam.AlignmentFile(sam)
-    for read in samfile.fetch():
-        if not read.is_secondary and not read.is_supplementary:
-            count += 1
-            if read.query_name in readlist:
-                print("ERROR!!")
-            readlist += [read.query_name]
-            read_align_stats = get_align_stats(read)
-            if remove_n_cols:
-                cigar_removed_stats = cigar_to_remove(read, remove_cols_dict)
-                for k, v in cigar_removed_stats.items():
-                    read_align_stats[k] -= v
+    for align in samfile.fetch():
+        if not align.is_secondary and not align.is_supplementary and align.reference_name:
+            read_align_stats = get_align_stats(align)
             char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
     char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I', 'D']}
     n_char = sum(char_align_stats_primary_oi.values())
-    #penalty = (n_char['C']+n_char['I']+n_char['D']+n_char['X'])/n_char["="]
-    #return {char: .1 for char in char_align_stats_primary_oi.keys()}, remove_cols_dict
-    return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}, remove_cols_dict
+    return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}
 
 
 def compute_log_L_rgs(p_char, cigar_stats):
@@ -167,7 +73,7 @@ def compute_log_L_rgs(p_char, cigar_stats):
     return value
 
 
-def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
+def log_L_rgs_dict(bwa_sam, p_char):
     """dict containing log(L(r|s)) for all pairwise alignments in bwa output
     
         bwa_sam: path to sam file bwa output
@@ -182,14 +88,10 @@ def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
         if alignment.reference_name:
             align_stats = get_align_stats(alignment)
             data = [alignment.query_name, alignment.reference_name, align_stats.copy()]
-            if remove_cols_dict:
-                cigar_removed_stats = cigar_to_remove(alignment, remove_cols_dict)
-                for k, v in cigar_removed_stats.items():
-                    align_stats[k] = align_stats[k] - v
             val = compute_log_L_rgs(p_char, align_stats)
-            data += [align_stats, val]
+            data += [val]
             ref_name, query_name = alignment.reference_name, alignment.query_name
-            species_tid = ref_name.split(":")[0]
+            species_tid = int(ref_name.split(":")[0])
             if (val != None and ((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < val)):
                 log_L_rgs[(query_name, species_tid)] = val
                 data += [species_tid]
@@ -199,12 +101,12 @@ def log_L_rgs_dict(bwa_sam, p_char, remove_cols_dict=None):
         else:
             data_cigars.append([alignment.query_name, "-"])
 
-    df_cigars = pd.DataFrame(data_cigars, columns=['query', 'reference', 'cigar', 'cigar_n_removed', 'score', 'updated'])
+    df_cigars = pd.DataFrame(data_cigars, columns=['query', 'reference', 'cigar', 'score', 'updated'])
     df_cigars.to_csv("cigar_scores.tsv", sep='\t', index=False)
     return log_L_rgs
 
 
-def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
+def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df, input_threshold, output_dir, fname):
     """Expectation maximization algorithm for alignments in log_L_rgs dict
         
         log_L_rgs: dict[(r,s)]=log(L(r|s))
@@ -214,8 +116,21 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
         return: composition vector f[s]=relative abundance of s from sequence database
     """
     n_db = len(db_ids)
+    n_reads = len(unflatten(log_L_rgs))
     f = dict.fromkeys(db_ids, 1 / n_db)
     counter, break_flag = 1, False
+
+    # set up dir to output results after each iteration
+    dir = f"{os.path.join(output_dir, fname)}_iterations"
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+    # set output abundance threshold
+    f_thresh = 1/n_reads
+    if n_reads > 1000:
+        f_thresh = 10/n_reads
+    if input_threshold < f_thresh:
+        f_thresh = input_threshold
 
     total_log_likelihood = -math.inf
     while (True):
@@ -232,7 +147,6 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
         L_sgr = unflatten({(s, r): v / L_r_c[r] for (r, s), v in L_rns_c.items()})
 
         # update total likelihood and f vector
-        n_reads = len(L_r_c)
         log_L_r = {r: math.log(v) - log_c[r] for r, v in L_r_c.items()}
         prev_log_likelihood = total_log_likelihood
         total_log_likelihood = sum(log_L_r.values())
@@ -257,15 +171,10 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df):
 
         # exit loop if log likelihood increase less than threshold
         if log_likelihood_diff < threshold:
-            f_thresh = 1/n_reads
             f = {k: v for k, v in f.items() if v >= f_thresh}
             break_flag = True
 
-        dir = f"{os.path.join(args.output_dir, filename)}_{args.lli}_iterations"
-        if not os.path.exists(dir):
-            os.makedirs(dir)
         f_to_lineage_df(f, f"{dir}/{counter}", nodes_df, names_df)
-        #f_to_lineage_df_lineage_txt(f,f"{os.path.join(args.output_dir, filename)}_{args.lli}_{counter}")
         counter += 1
 
 
@@ -295,24 +204,6 @@ def create_names_df(names_path):
     names_df.columns = name_headers
     names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
     return names_df
-
-
-def get_species_tid(tid, nodes_df):
-    """ Get species level taxid in linegage for taxid [tid]
-
-        tid (int): taxid for species level or more specific
-
-        return (int): species taxid in lineage
-    """
-    if str(tid) not in nodes_df.index:
-        raise ValueError(f"Taxid:{tid} not found in nodes file")
-    row = nodes_df.loc[str(tid)]
-    while row['rank'] != 'species':
-        parent_tid = row['parent_tax_id']
-        row = nodes_df.loc[str(parent_tid)]
-        if row['rank'] == 'superkingdom':
-            raise ValueError(f"No species tax id for taxid:{tid}")
-    return row.name
 
 
 def get_fasta_ids(fasta_path):
@@ -362,7 +253,7 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
     """
 
     results_df = pd.DataFrame(list(zip(f.keys(), f.values())), columns=["tax_id", "abundance"])
-    lineages = results_df["tax_id"].apply(lambda x: lineage_dict_from_tid(str(x), nodes_df, names_df))
+    lineages = results_df["tax_id"].apply(lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
     header_order = ["abundance", "species", "genus", "family", "order", "class",
                     "phylum", "clade", "superkingdom", "strain", "subspecies",
@@ -375,44 +266,6 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
 
     results_df.to_csv(f"{tsv_output_name}.tsv", index=False, sep='\t')
     return results_df
-
-def f_to_lineage_df_lineage_txt(f, tsv_output_name):
-    results_df = pd.DataFrame(list(zip(f.keys(), f.values())), columns=["tax_id", "abundance"])
-    taxid_df = pd.read_csv("./db_ezbiocloud/ezbiocloud_id_taxonomy.txt", names=['id', 'lineage'], sep="\t")
-    lineage_dict = dict(zip(taxid_df['id'], taxid_df['lineage']))
-    results_df['lineage'] = results_df['tax_id'].apply(lambda id: lineage_dict[int(id)])
-    results_df.to_csv(f"{tsv_output_name}.tsv", index=False, sep='\t')
-    return results_df
-
-
-
-def f_reduce(f, threshold):
-    """reduce composition vector f to only those with value > threshold, then normalize
-
-        f: composition vector
-        threshold: float to cut off value
-        return: array of reduced composition vector
-    """
-
-    f_dropped = {k: v for k, v in f.items() if v > threshold}
-    f_total = sum(f_dropped.values())
-    return {k: v / f_total for k, v in f_dropped.items()}
-
-
-def df_reduce(results_df, threshold):
-    """
-    reduce results dataframe [results_df] to only those with value > [threshold], then normalize
-        results_df (df):
-        threshold (float): minimum abundance to keep in results
-
-    returns (df): pandas df with lineage and abundances for values in f
-    """
-
-    df_reduced = results_df[results_df['abundance'] >= threshold].reset_index(drop=True)
-    total = df_reduced['abundance'].sum()
-    df_reduced['abundance'] = df_reduced['abundance'].apply(lambda val: val/total)
-    return df_reduced
-
 
 
 if __name__ == "__main__":
@@ -427,29 +280,36 @@ if __name__ == "__main__":
         '--threshold', '-t', type=float, default=0.0001,
         help='min species abundance in results [0.0001]')
     parser.add_argument(
-        '--names', type=str, default="NCBI_taxonomy/names.dmp",
+        '--names', type=str, default="./database/NCBI_taxonomy/names.dmp",
         help='path to names.dmp')
     parser.add_argument(
-        '--nodes', type=str, default="NCBI_taxonomy/nodes.dmp",
+        '--nodes', type=str, default="./database/NCBI_taxonomy/nodes.dmp",
         help='path to nodes.dmp')
     parser.add_argument(
         '--threads', type=int, default=40,
         help='threads utilized by minimap')
     parser.add_argument(
-        '--db', type=str, default="db_combined/combined_tid.fasta",
+        '--db', type=str, default="./database/combined_tid.fasta",
         help='path to fasta file of database sequences')
     parser.add_argument(
         '--output', '-o', type=str,
         help='output filename')
     parser.add_argument(
-        '--output_dir', type=str, default="results_combineddb_removedels_1readcutoff/",
+        '--output_dir', type=str, default="results_test/",
         help='output directory name')
     args = parser.parse_args()
 
     # convert taxonomy files to dataframes
-    nodes_df = create_nodes_df(args.nodes)
-    names_df = create_names_df(args.names)
-    db_species_tids = get_fasta_ids(args.db)
+    database = 'default'
+    if database == 'default':
+        nodes_df = pd.read_csv("./database/NCBI_taxonomy/nodes_df.tsv", sep='\t').set_index('tax_id')
+        names_df = pd.read_csv("./database/NCBI_taxonomy/names_df.tsv", sep='\t').set_index('tax_id')
+        db_species_tids = pd.read_csv("./database/unique_taxids.tsv", sep='\t')['taxonomy_id']
+    else:
+        nodes_df = create_nodes_df(args.nodes)
+        names_df = create_names_df(args.names)
+        db_species_tids = get_fasta_ids(args.db)
+
 
     # output files
     if not os.path.exists(args.output_dir):
@@ -467,15 +327,14 @@ if __name__ == "__main__":
         sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         pwd = os.getcwd()
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t {args.threads} -N 1000 -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
+            f"minimap2 -x map-ont -ac -t {args.threads} -N 50 -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
             shell=True)
 
     # script
-    p_char, remove_cols_dict = get_char_align_probabilites(sam_file, remove_n_cols=False)
-    log_L_rgs = log_L_rgs_dict(sam_file, p_char, remove_cols_dict)
-    f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df)
-    results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}", nodes_df, names_df)
+    p_char = get_char_align_probabilites(sam_file)
+    log_L_rgs = log_L_rgs_dict(sam_file, p_char)
+    f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df, args.threshold, args.output_dir, filename)
+    results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}", nodes_df, names_df)
     #results_df_full = f_to_lineage_df_lineage_txt(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}")
-    results_df = df_reduce(results_df_full, args.threshold)
-    results_df.to_csv(f"{os.path.join(args.output_dir, filename)}_{args.lli}.tsv", index=False, sep='\t')
-
+    #results_df = df_reduce(results_df_full, args.threshold)
+    #results_df.to_csv(f"{os.path.join(args.output_dir, filename)}.tsv", index=False, sep='\t')
