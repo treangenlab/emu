@@ -15,103 +15,103 @@ import math
 import pysam
 import numpy as np
 import pandas as pd
-from collections import Counter
 from flatten_dict import unflatten
+from operator import add, mul
 from Bio import SeqIO
 
+## static global variables
+CIGAR_OPS = [1, 4, 7, 8]
 
 
 def get_align_stats(alignment):
     """Convert list of CIGAR stats containing NM to a dict containing mismatches
         
         alignment: pysam.AlignmentFile
-        return: dict of cigar stats
+        return: list of counts (ints) for each cigar operation defined in CIGAR_OPS
     """
-    cigar_stats = alignment.get_cigar_stats()[0]
-    cigar_headers = ['M', 'I', 'D', 'N', 'S', 'H', 'P', '=', 'X', 'B', 'NM']
-    char_align_stats = dict(zip(cigar_headers, cigar_stats))
-    char_align_stats['C'] = char_align_stats['H'] + char_align_stats['S']
-    for k in ['M', 'N', 'S', 'H', 'P', 'B', 'NM']:
-        char_align_stats.pop(k)
-    return char_align_stats
+    return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
 
 
-def get_char_align_probabilites(sam):
+def get_cigar_op_log_probabilites(sam):
     """P(match), P(mismatch), P(insertion), P(deletion), P(clipping),
         by counting how often the corresponding operations occur in the primary alignments
         and by normalizing over the total sum of operations
     
         sam: path to sam file bwa output
-        return: dict of likelihood for each cigar output with prob > 0
+        return: list of log probabilites (float) for each cigar operation defined in CIGAR_OPS, where p > 0
+                zero_locs: list of indices (int) where probability == 0
     """
-    char_align_stats_primary = {}
+    cigar_stats_primary = [0] * len(CIGAR_OPS)
     samfile = pysam.AlignmentFile(sam)
-    for align in samfile.fetch():
-        if not align.is_secondary and not align.is_supplementary and align.reference_name:
-            read_align_stats = get_align_stats(align)
-            char_align_stats_primary = Counter(char_align_stats_primary) + Counter(read_align_stats)
-    char_align_stats_primary_oi = {k: char_align_stats_primary[k] for k in ['=', 'C', 'X', 'I', 'D']}
-    n_char = sum(char_align_stats_primary_oi.values())
-    return {char: val / n_char for char, val in char_align_stats_primary_oi.items()}
+    for alignment in samfile.fetch():
+        if not alignment.is_secondary and not alignment.is_supplementary and alignment.reference_name:
+            cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
+    zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
+
+    if zero_locs:
+        for i in sorted(zero_locs, reverse=True):
+            del cigar_stats_primary[i]
+    n_char = sum(cigar_stats_primary)
+    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs
 
 
-def compute_log_L_rgs(p_char, cigar_stats):
-    """ log(L(r|s)) = log(P(match)) ×n_matches + log(P(mismatches)) ×n_mismatches ...
+def compute_log_L_rgs(alignment, cigar_stats, log_p_cigar_op):
+    """ log(L(r|s)) = log(P(match)) × n_matches + log(P(mismatches)) × n_mismatches ...
     
-        p_dict: dict of CIGAR likelihoods
-        cigar_stats: dict of cigar stats to compute
-        return: float log(L(r|s)) for sequences r and s in cigar_stats alignment
+        alignment: pysam alignment to score
+        cigar_stats: list of cigar stats to compute
+        log_p_cigar_op: list of probabilities values corresponding to cigar_stats
+        return: log_score (float), ref_name (str), query_name (str), specied_tid (int)
     """
-    cigar_stats_oi = {k: cigar_stats[k] for k in ['C', 'X', 'I', '=']}
-    value = 0
-    for char, count in cigar_stats_oi.items():
-        if count > 0:
-            if char not in p_char or p_char[char] == 0:
-                return None
-            else:
-                value += math.log(p_char[char]) * count
-    return value
+
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
+    ref_name, query_name = alignment.reference_name, alignment.query_name
+    species_tid = int(ref_name.split(":")[0])
+    return log_score, ref_name, query_name, species_tid
 
 
-def log_L_rgs_dict(bwa_sam, p_char):
+def log_L_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
     """dict containing log(L(r|s)) for all pairwise alignments in bwa output
     
-        bwa_sam: path to sam file bwa output
+        sam_path: path to sam file
         p_char: dict of likelihood for each cigar output with prob > 0
         return: dict[(r,s)]=log(L(r|s))
     """
     # calculate log(L(r|s)) for all alignments
     log_L_rgs = {}
-    samfile = pysam.AlignmentFile(bwa_sam)
-    data_cigars = []
-    for alignment in samfile.fetch():
-        if alignment.reference_name:
-            align_stats = get_align_stats(alignment)
-            data = [alignment.query_name, alignment.reference_name, align_stats.copy()]
-            val = compute_log_L_rgs(p_char, align_stats)
-            data += [val]
-            ref_name, query_name = alignment.reference_name, alignment.query_name
-            species_tid = int(ref_name.split(":")[0])
-            if (val != None and ((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < val)):
-                log_L_rgs[(query_name, species_tid)] = val
-                data += [species_tid]
-            else:
-                data += ['']
-            data_cigars.append(data)
-        else:
-            data_cigars.append([alignment.query_name, "-"])
+    samfile = pysam.AlignmentFile(sam_path)
 
-    df_cigars = pd.DataFrame(data_cigars, columns=['query', 'reference', 'cigar', 'score', 'updated'])
-    df_cigars.to_csv("cigar_scores.tsv", sep='\t', index=False)
+    if not p_cigar_op_zero_locs:
+        for alignment in samfile.fetch():
+            if alignment.reference_name:
+                cigar_stats = get_align_stats(alignment)
+                log_score, ref_name, query_name, species_tid = compute_log_L_rgs(alignment, cigar_stats, log_p_cigar_op)
+                if (((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < log_score)):
+                    log_L_rgs[(query_name, species_tid)] = log_score
+    else:
+        for alignment in samfile.fetch():
+            if alignment.reference_name:
+                cigar_stats = get_align_stats(alignment)
+                if sum([cigar_stats[x] for x in p_cigar_op_zero_locs]) == 0:
+                    for i in sorted(p_cigar_op_zero_locs, reverse=True):
+                        del cigar_stats[i]
+                    log_score, ref_name, query_name, species_tid = compute_log_L_rgs(alignment, cigar_stats, log_p_cigar_op)
+                    if (((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < log_score)):
+                        log_L_rgs[(query_name, species_tid)] = log_score
     return log_L_rgs
 
 
-def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df, input_threshold, output_dir, fname):
+def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_threshold, output_dir, fname):
     """Expectation maximization algorithm for alignments in log_L_rgs dict
         
         log_L_rgs: dict[(r,s)]=log(L(r|s))
         db_ids: array of ids in database
-        threshold: log likelihood increase minimum to continue EM iterations
+        lli_thresh: log likelihood increase minimum to continue EM iterations
+        names_df: pandas df of names.dmp with columns ['tax_id', 'name_txt','unique_name', 'name_class'] with tax_id as index
+        nodes_df: pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'] with tax_id as index
+        input_threshold: float of minimum relative abundance in output
+        output_dir: str path of output directory
+        fname: str output filename
 
         return: composition vector f[s]=relative abundance of s from sequence database
     """
@@ -170,7 +170,7 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df, input_thresh
             raise ValueError(f"total_log_likelihood decreased from prior iteration")
 
         # exit loop if log likelihood increase less than threshold
-        if log_likelihood_diff < threshold:
+        if log_likelihood_diff < lli_thresh:
             f = {k: v for k, v in f.items() if v >= f_thresh}
             break_flag = True
 
@@ -181,9 +181,8 @@ def EM_iterations(log_L_rgs, db_ids, threshold, names_df, nodes_df, input_thresh
 def create_nodes_df(nodes_path):
     """convert nodes.dmp file into pandas dataframe
 
-        nodes_path (str):
-
-        returns (df):
+        nodes_path (str): path to nodes.dmp file
+        returns (df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'] with tax_id as index
     """
     node_headers = ['tax_id', 'parent_tax_id', 'rank']
     nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
@@ -195,9 +194,8 @@ def create_nodes_df(nodes_path):
 def create_names_df(names_path):
     """convert names.dmp file into pandas dataframe
 
-        names_path (str):
-
-        returns (df):
+        names_path (str): path to names.dmp file
+        returns (df): pandas df of names.dmp with columns ['tax_id', 'name_txt','unique_name', 'name_class'] with tax_id as index
     """
     name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
     names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str).drop([1, 3, 5, 7], axis=1)
@@ -210,7 +208,6 @@ def get_fasta_ids(fasta_path):
     """ Returns list of unique ids in fasta [fasta_path]
 
         fasta_path (str): path to database fasta
-
         returns (list): list of unique ids (str) in fasta
     """
     tids = []
@@ -222,10 +219,10 @@ def get_fasta_ids(fasta_path):
 def lineage_dict_from_tid(tid, nodes_df, names_df):
     """get dict of lineage for given taxid
     
-    tid(str): tax id to extract lineage dict from
-    nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'] with tax_id as index
-    names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt','unique_name', 'name_class'] with tax_id as index
-    return(dict): [taxonomy rank]:name
+        tid(str): tax id to extract lineage dict from
+        nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'] with tax_id as index
+        names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt','unique_name', 'name_class'] with tax_id as index
+        return(dict): [taxonomy rank]:name
     """
 
     lineage_dict = {}
@@ -238,17 +235,15 @@ def lineage_dict_from_tid(tid, nodes_df, names_df):
     return lineage_dict
 
 
-def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
+def f_to_lineage_df(f, tsv_output_path, nodes_df, names_df):
     """converts composition vector f to a pandas df where each row contains abundance and
         tax lineage for each classified species.
         Stores df as .tsv file in tsv_output_name.
 
         f (arr): composition vector with keys database sequnce names for abundace output
-        tsv_output_name (str): name of output .tsv file of generated dataframe
-        nodes_path (str): string path to nodes.dmp from ncbi taxonomy dump
-        names_path (str): string path to names.dmp from ncbi taxonomy dump
-        seq2taxid_path (str): string path to tab separated file of seqid and taxids
-
+        tsv_output_path (str): path and name of output .tsv file of generated dataframe
+        nodes_df (df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'] with tax_id as index
+        names_df (df): pandas df of names.dmp with columns ['tax_id', 'name_txt','unique_name', 'name_class'] with tax_id as index
         returns (df): pandas df with lineage and abundances for values in f
     """
 
@@ -256,7 +251,7 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
     lineages = results_df["tax_id"].apply(lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
     header_order = ["abundance", "species", "genus", "family", "order", "class",
-                    "phylum", "clade", "superkingdom", "strain", "subspecies",
+                    "phylum", "clade", "superkingdom", "subspecies",
                     "species subgroup", "species group", "tax_id"]
     for col in header_order:
         if col not in results_df.columns:
@@ -264,7 +259,7 @@ def f_to_lineage_df(f, tsv_output_name, nodes_df, names_df):
     results_df = results_df.sort_values(header_order[8:0:-1]).reset_index(drop=True)
     results_df = results_df.reindex(header_order, axis=1)
 
-    results_df.to_csv(f"{tsv_output_name}.tsv", index=False, sep='\t')
+    results_df.to_csv(f"{tsv_output_path}.tsv", index=False, sep='\t')
     return results_df
 
 
@@ -305,7 +300,7 @@ if __name__ == "__main__":
         nodes_df = pd.read_csv("./database/NCBI_taxonomy/nodes_df.tsv", sep='\t').set_index('tax_id')
         names_df = pd.read_csv("./database/NCBI_taxonomy/names_df.tsv", sep='\t').set_index('tax_id')
         db_species_tids = pd.read_csv("./database/unique_taxids.tsv", sep='\t')['taxonomy_id']
-    else:
+    else: ##change how input database in handled
         nodes_df = create_nodes_df(args.nodes)
         names_df = create_names_df(args.names)
         db_species_tids = get_fasta_ids(args.db)
@@ -331,8 +326,8 @@ if __name__ == "__main__":
             shell=True)
 
     # script
-    p_char = get_char_align_probabilites(sam_file)
-    log_L_rgs = log_L_rgs_dict(sam_file, p_char)
+    log_p_cigar_op, p_cigar_zero_locs = get_cigar_op_log_probabilites(sam_file)
+    log_L_rgs = log_L_rgs_dict(sam_file, log_p_cigar_op, p_cigar_zero_locs)
     f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df, args.threshold, args.output_dir, filename)
     results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}", nodes_df, names_df)
     #results_df_full = f_to_lineage_df_lineage_txt(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}")
