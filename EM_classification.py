@@ -149,6 +149,7 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
     """
     n_db = len(db_ids)
     n_reads = len(unflatten(log_L_rgs))
+    stdout.write(f"Assigned read count: {n_reads}\n")
     f = dict.fromkeys(db_ids, 1 / n_db)
     counter, break_flag = 0, False
 
@@ -183,7 +184,7 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
             f = {k: v for k, v in f.items() if v >= f_thresh}
             f_full, updated_log_likelihood = EM(log_L_rgs, f, n_reads)
             f_set_thresh = None
-            if input_threshold < f_thresh:
+            if f_thresh < input_threshold:
                 f = {k: v for k, v in f_full.items() if v >= input_threshold}
                 f_set_thresh, updated_log_likelihood = EM(log_L_rgs, f, n_reads)
             return f_full, f_set_thresh
