@@ -304,10 +304,6 @@ if __name__ == "__main__":
         '--max_read_len', type=int, default=1700,
         help='maximum read length')
     parser.add_argument(
-        '--threads', type=int, default=40,
-        help='threads utilized by minimap')
-    args = parser.parse_args()
-    parser.add_argument(
         '--db', type=str, default="./database/combined_tid.fasta",
         help='path to fasta file of database sequences')
     parser.add_argument(
@@ -316,6 +312,10 @@ if __name__ == "__main__":
     parser.add_argument(
         '--nodes', type=str, default="./database/NCBI_taxonomy/nodes.dmp",
         help='path to nodes.dmp')
+    parser.add_argument(
+        '--threads', type=int, default=40,
+        help='threads utilized by minimap')
+    args = parser.parse_args()
 
     # convert taxonomy files to dataframes
     database = 'default'
