@@ -10,6 +10,7 @@ import os
 import argparse
 import pathlib
 import subprocess
+from sys import stdout
 
 import math
 import pysam
@@ -80,6 +81,7 @@ def log_L_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
     # calculate log(L(r|s)) for all alignments
     log_L_rgs = {}
     samfile = pysam.AlignmentFile(sam_path)
+    unassigned_count = 0
 
     if not p_cigar_op_zero_locs:
         for alignment in samfile.fetch():
@@ -88,6 +90,8 @@ def log_L_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
                 log_score, ref_name, query_name, species_tid = compute_log_L_rgs(alignment, cigar_stats, log_p_cigar_op)
                 if (((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < log_score)):
                     log_L_rgs[(query_name, species_tid)] = log_score
+            else:
+                unassigned_count += 1
     else:
         for alignment in samfile.fetch():
             if alignment.reference_name:
@@ -98,6 +102,10 @@ def log_L_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
                     log_score, ref_name, query_name, species_tid = compute_log_L_rgs(alignment, cigar_stats, log_p_cigar_op)
                     if (((query_name, species_tid) not in log_L_rgs or log_L_rgs[(query_name, species_tid)] < log_score)):
                         log_L_rgs[(query_name, species_tid)] = log_score
+            else:
+                unassigned_count += 1
+
+    stdout.write(f"Unassigned read count: {unassigned_count}\n")
     return log_L_rgs
 
 
@@ -152,16 +160,13 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
         total_log_likelihood = sum(log_L_r.values())
         f = {s: (sum(r_map.values()) / n_reads) for s, r_map in L_sgr.items()}
 
-        print(f"*****ITERATION:{counter}*****")
-        print(total_log_likelihood)
-
         # check f vector sums to 1
         f_sum = sum(f.values())
         if not (.999 <= f_sum <= 1.0001):
             raise ValueError(f"f sums to {f_sum}, rather than 1")
 
         if break_flag:
-            print(f"Number of EM iterations: {counter}")
+            stdout.write(f"Number of EM iterations: {counter}\n")
             return f
 
         # confirm log likelihood increase
@@ -174,7 +179,7 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
             f = {k: v for k, v in f.items() if v >= f_thresh}
             break_flag = True
 
-        f_to_lineage_df(f, f"{dir}/{counter}", nodes_df, names_df)
+        #f_to_lineage_df(f, f"{dir}/{counter}", nodes_df, names_df)
         counter += 1
 
 
@@ -330,6 +335,3 @@ if __name__ == "__main__":
     log_L_rgs = log_L_rgs_dict(sam_file, log_p_cigar_op, p_cigar_zero_locs)
     f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df, args.threshold, args.output_dir, filename)
     results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}", nodes_df, names_df)
-    #results_df_full = f_to_lineage_df_lineage_txt(f, f"{os.path.join(args.output_dir, filename)}_full_{args.lli}")
-    #results_df = df_reduce(results_df_full, args.threshold)
-    #results_df.to_csv(f"{os.path.join(args.output_dir, filename)}.tsv", index=False, sep='\t')
