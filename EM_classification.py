@@ -300,6 +300,12 @@ if __name__ == "__main__":
     parser.add_argument(
         '--N', type=int, default=30,
         help='minimap max number of alignments per read')
+    parser.add_argument(
+        '--min_read_len', type=int, default=1300,
+        help='minimum read length')
+    parser.add_argument(
+        '--max_read_len', type=int, default=1700,
+        help='maximum read length')
     args = parser.parse_args()
 
     # convert taxonomy files to dataframes
@@ -327,10 +333,15 @@ if __name__ == "__main__":
     if filetype == '.sam':
         sam_file = f"{args.input_file}"
     else:
+        fasta_trimmed = os.path.join(args.output_dir, f"{filename}_trimmed.fa")
+        subprocess.check_output(
+            f"bioawk -c fastx '(length($seq)<={args.max_read_len}&&length($seq)>={args.min_read_len}){{print \">\" $name ORS $seq}}' {args.input_file}"
+            f" > {fasta_trimmed}",
+            shell=True)
         sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         pwd = os.getcwd()
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
+            f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {fasta_trimmed} -o {sam_file}",
             shell=True)
 
     # script
@@ -338,3 +349,5 @@ if __name__ == "__main__":
     log_L_rgs = log_L_rgs_dict(sam_file, log_p_cigar_op, p_cigar_zero_locs)
     f = EM_iterations(log_L_rgs, db_species_tids, args.lli, names_df, nodes_df, args.threshold, args.output_dir, filename)
     results_df_full = f_to_lineage_df(f, f"{os.path.join(args.output_dir, filename)}", nodes_df, names_df)
+
+    ## delete extra files? .sam and trimmed.fa
