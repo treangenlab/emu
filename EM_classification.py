@@ -129,9 +129,9 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
     counter, break_flag = 1, False
 
     # set up dir to output results after each iteration
-    dir = f"{os.path.join(output_dir, fname)}_iterations"
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    #dir = f"{os.path.join(output_dir, fname)}_iterations"
+    #if not os.path.exists(dir):
+    #    os.makedirs(dir)
 
     # set output abundance threshold
     f_thresh = 1/n_reads
@@ -298,7 +298,7 @@ if __name__ == "__main__":
         '--output_dir', type=str, default="results_test/",
         help='output directory name')
     parser.add_argument(
-        '--N', type=int, default=30,
+        '--N', type=int, default=25,
         help='minimap max number of alignments per read')
     parser.add_argument(
         '--min_read_len', type=int, default=1300,
