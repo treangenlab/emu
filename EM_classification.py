@@ -297,6 +297,9 @@ if __name__ == "__main__":
     parser.add_argument(
         '--output_dir', type=str, default="results_test/",
         help='output directory name')
+    parser.add_argument(
+        '--N', type=int, default=30,
+        help='minimap max number of alignments per read')
     args = parser.parse_args()
 
     # convert taxonomy files to dataframes
@@ -314,7 +317,7 @@ if __name__ == "__main__":
     # output files
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    filename = f"{pathlib.PurePath(args.input_file).stem}"
+    filename = f"{pathlib.PurePath(args.input_file).stem}_N{args.N}"
     if args.output:
         filename = args.output
     filetype = pathlib.PurePath(args.input_file).suffix
@@ -327,7 +330,7 @@ if __name__ == "__main__":
         sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         pwd = os.getcwd()
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t {args.threads} -N 50 -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
+            f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {args.input_file} -o {sam_file}",
             shell=True)
 
     # script
