@@ -109,7 +109,7 @@ def log_L_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
     return log_L_rgs
 
 
-def EM(log_L_rgs, f, n_reads):
+def EM(log_L_rgs, f):
     """
 
     :return:
@@ -128,6 +128,7 @@ def EM(log_L_rgs, f, n_reads):
 
     # update total likelihood and f vector
     log_L_r = {r: math.log(v) - log_c[r] for r, v in L_r_c.items()}
+    n_reads = len(log_L_r)
     #prev_log_likelihood = total_log_likelihood
     #total_log_likelihood = sum(log_L_r.values())
     return {s: (sum(r_map.values()) / n_reads) for s, r_map in L_sgr.items()}, sum(log_L_r.values())
@@ -151,7 +152,7 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
     n_reads = len(unflatten(log_L_rgs))
     stdout.write(f"Assigned read count: {n_reads}\n")
     f = dict.fromkeys(db_ids, 1 / n_db)
-    counter, break_flag = 0, False
+    counter, break_flag = 1, False
 
     # set up dir to output results after each iteration
     #dir = f"{os.path.join(output_dir, fname)}_iterations"
@@ -165,7 +166,7 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
 
     total_log_likelihood = -math.inf
     while (True):
-        f, updated_log_likelihood = EM(log_L_rgs, f, n_reads)
+        f, updated_log_likelihood = EM(log_L_rgs, f)
 
         # check f vector sums to 1
         f_sum = sum(f.values())
@@ -182,11 +183,11 @@ def EM_iterations(log_L_rgs, db_ids, lli_thresh, names_df, nodes_df, input_thres
         if log_likelihood_diff < lli_thresh:
             stdout.write(f"Number of EM iterations: {counter}\n")
             f = {k: v for k, v in f.items() if v >= f_thresh}
-            f_full, updated_log_likelihood = EM(log_L_rgs, f, n_reads)
+            f_full, updated_log_likelihood = EM(log_L_rgs, f)
             f_set_thresh = None
             if f_thresh < input_threshold:
                 f = {k: v for k, v in f_full.items() if v >= input_threshold}
-                f_set_thresh, updated_log_likelihood = EM(log_L_rgs, f, n_reads)
+                f_set_thresh, updated_log_likelihood = EM(log_L_rgs, f)
             return f_full, f_set_thresh
 
         #f_to_lineage_df(f, f"{dir}/{counter}", nodes_df, names_df)
@@ -298,12 +299,12 @@ if __name__ == "__main__":
     parser.add_argument(
         '--N', type=int, default=25,
         help='minimap max number of alignments per read')
-    parser.add_argument(
-        '--min_read_len', type=int, default=1300,
-        help='minimum read length')
-    parser.add_argument(
-        '--max_read_len', type=int, default=1700,
-        help='maximum read length')
+    #parser.add_argument(
+    #    '--min_read_len', type=int, default=1300,
+    #    help='minimum read length')
+    #parser.add_argument(
+    #    '--max_read_len', type=int, default=1700,
+    #    help='maximum read length')
     parser.add_argument(
         '--db', type=str, default="./database/combined_tid.fasta",
         help='path to fasta file of database sequences')
@@ -333,7 +334,7 @@ if __name__ == "__main__":
     # output files
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    filename = f"{pathlib.PurePath(args.input_file[0]).stem}_N{args.N}"
+    filename = f"{pathlib.PurePath(args.input_file[0]).stem}"
     if args.output:
         filename = args.output
     filetype = pathlib.PurePath(args.input_file[0]).suffix
@@ -348,20 +349,20 @@ if __name__ == "__main__":
             f"minimap2 -x sr -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {input} -o {sam_file}",
             shell=True)
     else:
-        fasta_trimmed = os.path.join(args.output_dir, f"{filename}_trimmed.fa")
-        subprocess.check_output(
-            f"bioawk -c fastx '(length($seq)<={args.max_read_len}&&length($seq)>={args.min_read_len}){{print \">\" $name ORS $seq}}' {input}"
-            f" > {fasta_trimmed}",
-            shell=True)
+        #fasta_trimmed = os.path.join(args.output_dir, f"{filename}_trimmed.fa")
+        #subprocess.check_output(
+        #    f"bioawk -c fastx '(length($seq)<={args.max_read_len}&&length($seq)>={args.min_read_len}){{print \">\" $name ORS $seq}}' {input}"
+        #    f" > {fasta_trimmed}",
+        #    shell=True)
         sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {fasta_trimmed} -o {sam_file}",
+            f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {input} -o {sam_file}",
             shell=True)
 
     # script
     log_p_cigar_op, p_cigar_zero_locs = get_cigar_op_log_probabilites(sam_file)
     log_L_rgs = log_L_rgs_dict(sam_file, log_p_cigar_op, p_cigar_zero_locs)
-    f_full, f_set_thresh = EM_iterations(log_L_rgs, db_species_tids, 1, names_df, nodes_df, args.threshold, args.output_dir, filename)
+    f_full, f_set_thresh = EM_iterations(log_L_rgs, db_species_tids, .1, names_df, nodes_df, args.threshold, args.output_dir, filename)
     results_df_full = f_to_lineage_df(f_full, f"{os.path.join(args.output_dir, filename)}", nodes_df, names_df)
     if f_set_thresh:
         results_df_thresh = f_to_lineage_df(f_set_thresh, f"{os.path.join(args.output_dir, filename)}_abundance_thresh_{args.threshold}", nodes_df, names_df)
