@@ -306,29 +306,18 @@ if __name__ == "__main__":
     #    '--max_read_len', type=int, default=1700,
     #    help='maximum read length')
     parser.add_argument(
-        '--db', type=str, default="./database/combined_tid.fasta",
-        help='path to fasta file of database sequences')
-    parser.add_argument(
-        '--names', type=str, default="./database/NCBI_taxonomy/names.dmp",
-        help='path to names.dmp')
-    parser.add_argument(
-        '--nodes', type=str, default="./database/NCBI_taxonomy/nodes.dmp",
-        help='path to nodes.dmp')
+        '--db', type=str, default="./emu_database",
+        help='path to emu database containing: names_df.tsv, nodes_df.tsv, species_taxid.fasta')
     parser.add_argument(
         '--threads', type=int, default=40,
         help='threads utilized by minimap')
     args = parser.parse_args()
 
     # convert taxonomy files to dataframes
-    database = 'default'
-    if database == 'default':
-        nodes_df = pd.read_csv("./database/NCBI_taxonomy/nodes_df.tsv", sep='\t').set_index('tax_id')
-        names_df = pd.read_csv("./database/NCBI_taxonomy/names_df.tsv", sep='\t').set_index('tax_id')
-        db_species_tids = pd.read_csv("./database/unique_taxids.tsv", sep='\t')['taxonomy_id']
-    else: ##change how input database in handled
-        nodes_df = create_nodes_df(args.nodes)
-        names_df = create_names_df(args.names)
-        db_species_tids = get_fasta_ids(args.db)
+    emu_path = "."
+    nodes_df = pd.read_csv(os.path.join(args.db, "nodes_df.tsv"), sep='\t').set_index('tax_id')
+    names_df = pd.read_csv(os.path.join(args.db, "names_df.tsv"), sep='\t').set_index('tax_id')
+    db_species_tids = pd.read_csv(os.path.join(args.db, "unique_taxids.tsv"), sep='\t')['tax_id']
 
 
     # output files
@@ -346,7 +335,7 @@ if __name__ == "__main__":
     elif args.short_read:
         sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         subprocess.check_output(
-            f"minimap2 -x sr -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {input} -o {sam_file}",
+            f"minimap2 -x sr -ac -t {args.threads} -N {args.N} -p .9 --eqx {os.path.join(args.db, 'species_taxid.fasta')} {input} -o {sam_file}",
             shell=True)
     else:
         #fasta_trimmed = os.path.join(args.output_dir, f"{filename}_trimmed.fa")
@@ -356,7 +345,7 @@ if __name__ == "__main__":
         #    shell=True)
         sam_file = os.path.join(args.output_dir, f"{filename}.sam")
         subprocess.check_output(
-            f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx {args.db} {input} -o {sam_file}",
+            f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx {os.path.join(args.db, 'species_taxid.fasta')} {input} -o {sam_file}",
             shell=True)
 
     # script
