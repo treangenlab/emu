@@ -66,7 +66,7 @@ python build_database.py zymo_assembled_db --names example_customdb/names.dmp --
 ```
 
 ```bash
-python EM_classification.py example/emu_example.fa --db ./zymo_assembled_db
+python emu.py example/full_length.fa --db ./zymo_assembled_db
 ```
 
 

@@ -18,7 +18,7 @@ import pandas as pd
 from flatten_dict import unflatten
 
 ## static global variables
-CIGAR_OPS = [1, 4, 7, 8]   #['I', 'S', '=', 'X']
+CIGAR_OPS = [1, 4, 8]   #['I', 'S', 'X']
 
 
 def get_align_stats(alignment):
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     log_prob_cigar_op, locs_p_cigar_zero = get_cigar_op_log_probabilites(sam_file)
     log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, locs_p_cigar_zero)
     f_full, f_set_thresh = expectation_maximization_iterations\
-        (log_prob_rgs, db_species_tids, .1, args.min_abundance)
+        (log_prob_rgs, db_species_tids, .01, args.min_abundance)
     results_df_full = freq_to_lineage_df(f_full, out_file, df_nodes, df_names)
     if f_set_thresh:
         results_df_thresh = freq_to_lineage_df(f_set_thresh,
