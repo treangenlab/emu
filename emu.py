@@ -150,7 +150,7 @@ def expectation_maximization(log_p_rgs, freq):
 def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold):
     """Full expectation maximization algorithm for alignments in log_L_rgs dict
 
-        log_L_rgs{[str,int]:float}: dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
+        log_p_rgs{[str,int]:float}: dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
         db_ids(list(int)): list of each unique species taxonomy id present in database
         lli_thresh(float): log likelihood increase minimum to continue EM iterations
         input_threshold(float): minimum relative abundance in output
@@ -190,7 +190,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
             if freq_thresh < input_threshold:
                 freq = {k: v for k, v in freq_full.items() if v >= input_threshold}
                 freq_set_thresh, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
-            return f_full, freq_set_thresh
+            return freq_full, freq_set_thresh
 
         counter += 1
 
@@ -252,10 +252,10 @@ if __name__ == "__main__":
         '--short-read', '-s', action='store_true',
         help='apply tag if short read data')
     parser.add_argument(
-        '--min-read-len', type=int, default=1300,
+        '--min-read-len', type=int, default=1000,
         help='minimum read length for long-read data')
     parser.add_argument(
-        '--max-read-len', type=int, default=1700,
+        '--max-read-len', type=int, default=5000,
         help='maximum read length for long-read data')
     parser.add_argument(
         '--min-abundance', '-a', type=float, default=0.0001,

@@ -3,36 +3,40 @@
 
 ### Description
 
-Emu is a realtive abundance estimator..
+Emu is a expectation maximization algorithm designed to estimate species-level bacterial and archael relative abundances of a microbiome sample through full-length 16s nucleotide sequences.
 
 ### Synopsis
 
 - Calculate abundances Oxford Nanopore single-end:
 ```bash
-python EM_classification.py example/full_length.fa
+python emu.py example/full_length.fa
 ```
 - Calculate abundances short-read:
 ```bash
-python EM_classification.py --sr example/short_read1.fa example/short_read2.fa
+python emu.py --short-read example/short_read_f.fq example/short_read_r.fq
 ```
 
 ### Installation
 
 bioconda...
 
-```bash
-conda config --add channels r
-conda config --add channels bioconda
-conda install pysam
-conda install pandas
-pip install flatten-dict
-
-```
 
 ### Options
 
+#### Algorithm Options
 
+* --short-read: [FALSE] apply tag if input sequences are short reads
+* --min-read-len: [1000] drops all sequences below this length; used in long-read only
+* --max-read-len: [5000] drops all sequences above this length; used in long-read only
+* --min-abundance: [0.0001] generates results with only species relative abundance above this value. Note: .01 = 1%
+* --db: [./emu_database] path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv
+* --N: [25] max number of alignments utilized for each read
 
+#### Input/Output Options
+
+* --output-dir: [./] directory for output results
+* --output: [{input_file}] output filename 
+* --threads: [3] number of threads utilized by minimap2
 
 
 ### Build Custom Database
