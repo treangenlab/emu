@@ -1,8 +1,5 @@
 emu_default:
   stage: test
-  image: python:3.7
-  #before_script:
-    #- 
+  image: python:3.7 
   script:
     - echo "test"
-	#- python emu.py example/full_length.fa
