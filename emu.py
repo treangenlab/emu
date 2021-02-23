@@ -84,10 +84,9 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
         return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
     """
     # calculate log(L(read|seq)) for all alignments
-    log_p_rgs = {}
+    log_p_rgs, unassigned_set = {}, set()
     # pylint: disable=maybe-no-member
     sam_filename = pysam.AlignmentFile(sam_path, 'rb')
-    unassigned_count = 0
 
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch():
@@ -99,7 +98,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
                      log_p_rgs[(query_name, species_tid)] < log_score)):
                     log_p_rgs[(query_name, species_tid)] = log_score
             else:
-                unassigned_count += 1
+                unassigned_set.add(alignment.query_name)
     else:
         for alignment in sam_filename.fetch():
             if alignment.reference_name:
@@ -113,9 +112,9 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
                          log_p_rgs[(query_name, species_tid)] < log_score)):
                         log_p_rgs[(query_name, species_tid)] = log_score
             else:
-                unassigned_count += 1
+                unassigned_set.add(alignment.query_name)
 
-    stdout.write(f"Unassigned read count: {unassigned_count}\n")
+    stdout.write(f"Unassigned read count: {len(unassigned_set)}\n")
     return log_p_rgs
 
 
@@ -249,24 +248,24 @@ if __name__ == "__main__":
         'input_file', type=str, nargs='+',
         help='filepath to input nt sequence file')
     parser.add_argument(
-        '--short-read', '-s', action='store_true',
-        help='apply tag if short read data')
+        '--type', '-x', choices=['map-ont', 'map-pb', 'sr'], default='map-ont',
+        help='short-read: sr, Pac-Bio:map-pb, ONT:map-ont [map-ont]')
     parser.add_argument(
-        '--min-read-len', type=int, default=1000,
-        help='minimum read length for long-read data')
+        '--min-read-len', type=int, default=0,
+        help='minimum read length for long-read data [0]')
     parser.add_argument(
         '--max-read-len', type=int, default=5000,
-        help='maximum read length for long-read data')
+        help='maximum read length for long-read data [5000]')
     parser.add_argument(
         '--min-abundance', '-a', type=float, default=0.0001,
         help='min species abundance in results [0.0001]')
     parser.add_argument(
         '--db', type=str, default="./emu_database",
         help='path to emu database containing: names_df.tsv, '
-             'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv')
+             'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [./emu_database]')
     parser.add_argument(
         '--N', type=int, default=25,
-        help='minimap max number of alignments per read [25]')
+        help='minimap max number of secondary alignments per read [25]')
     parser.add_argument(
         '--output-dir', type=str, default="./",
         help='output directory name [./]')
@@ -292,28 +291,26 @@ if __name__ == "__main__":
     filetype = pathlib.PurePath(args.input_file[0]).suffix
 
     # generate read alignments
-    INPUT_FILE = " ".join(args.input_file)
+    input_file = " ".join(args.input_file)
     if filetype == '.sam':
-        sam_file = f"{INPUT_FILE}"
+        sam_file = f"{input_file}"
     else:
         sam_file = f"{out_file}.sam"
         db_sequence_file = os.path.join(args.db, 'species_taxid.fasta')
-        if args.short_read:
-            subprocess.check_output(
-                f"minimap2 -x sr -ac -t {args.threads} -N {args.N} "
-                f"-p .9 --eqx {db_sequence_file} {INPUT_FILE} -o {sam_file}",
-                shell=True)
-        else:
-            fasta_trimmed = f"{out_file}_trimmed.fa"
+        fasta_trimmed = f"{out_file}_trimmed.fa"
+        if args.type != 'sr':
             subprocess.check_output(
                 f"bioawk -c fastx '(length($seq)<={args.max_read_len}"
                 f"&&length($seq)>={args.min_read_len}){{print \">\" $name ORS $seq}}' "
-                f"{INPUT_FILE} > {fasta_trimmed}",
+                f"{input_file} > {fasta_trimmed}",
                 shell=True)
-            subprocess.check_output(
-                f"minimap2 -x map-ont -ac -t {args.threads} -N {args.N} -p .9 --eqx "
-                f"{db_sequence_file} {fasta_trimmed} -o {sam_file}",
-                shell=True)
+            input_file = fasta_trimmed
+
+        subprocess.check_output(
+            f"minimap2 -x {args.type} -ac -t {args.threads} -N {args.N} -p .9 --eqx "
+            f"{db_sequence_file} {input_file} -o {sam_file}",
+            shell=True)
+        if os.path.exists(fasta_trimmed):
             os.remove(fasta_trimmed)
 
     # perform EM algorithm & generate output
