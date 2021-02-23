@@ -1,0 +1,40 @@
+1	|	all	|		|	synonym	|
+1	|	root	|		|	scientific name	|
+2	|	Bacteria	|	Bacteria <bacteria>	|	scientific name	|
+2	|	bacteria	|		|	blast name	|
+2	|	eubacteria	|		|	genbank common name	|
+286	|	Pseudomonas	|		|	scientific name	|
+287	|	Pseudomonas aeruginosa	|		|	scientific name	|
+543	|	Enterobacteriaceae	|		|	scientific name	|
+561	|	Escherichia	|		|	scientific name	|
+562	|	Escherichia coli	|		|	scientific name	|
+590	|	Salmonella	|		|	scientific name	|
+1224	|	Proteobacteria	|		|	scientific name	|
+1236	|	Gammaproteobacteria	|		|	scientific name	|
+1239	|	Firmicutes	|		|	scientific name	|
+1279	|	Staphylococcus	|		|	scientific name	|
+1280	|	Staphylococcus aureus	|		|	scientific name	|
+1350	|	Enterococcus	|		|	scientific name	|
+1351	|	Enterococcus faecalis	|		|	scientific name	|
+1385	|	Bacillales	|		|	scientific name	|
+1386	|	Bacillus	|	Bacillus <firmicutes>	|	scientific name	|
+1423	|	Bacillus subtilis	|		|	scientific name	|
+1613	|	Limosilactobacillus fermentum	|		|	scientific name	|
+1637	|	Listeria	|		|	scientific name	|
+1639	|	Listeria monocytogenes	|		|	scientific name	|
+28901	|	Salmonella enterica	|		|	scientific name	|
+33958	|	Lactobacillaceae	|		|	scientific name	|
+72274	|	Pseudomonadales	|		|	scientific name	|
+81852	|	Enterococcaceae	|		|	scientific name	|
+90964	|	Staphylococcaceae	|		|	scientific name	|
+91061	|	Bacilli	|		|	scientific name	|
+91347	|	Enterobacterales	|		|	scientific name	|
+131567	|	cellular organisms	|		|	scientific name	|
+135621	|	Pseudomonadaceae	|		|	scientific name	|
+136841	|	Pseudomonas aeruginosa group	|		|	scientific name	|
+186817	|	Bacillaceae	|		|	scientific name	|
+186820	|	Listeriaceae	|		|	scientific name	|
+186826	|	Lactobacillales	|		|	scientific name	|
+653685	|	Bacillus subtilis group	|		|	scientific name	|
+1783272	|	Terrabacteria group	|		|	scientific name	|
+2742598	|	Limosilactobacillus	|		|	scientific name	|

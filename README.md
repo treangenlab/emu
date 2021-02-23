@@ -13,7 +13,7 @@ python emu.py example/full_length.fa
 ```
 - Calculate abundances short-read:
 ```bash
-python emu.py --short-read example/short_read_f.fq example/short_read_r.fq
+python emu.py --type sr example/short_read_f.fq example/short_read_r.fq
 ```
 
 ### Installation
@@ -25,8 +25,8 @@ bioconda...
 
 #### Algorithm Options
 
-* --short-read: [FALSE] apply tag if input sequences are short reads
-* --min-read-len: [1000] drops all sequences below this length; used in long-read only
+* --type: [map-ont] denote type of sequences [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]
+* --min-read-len: [0] drops all sequences below this length; used in long-read only
 * --max-read-len: [5000] drops all sequences above this length; used in long-read only
 * --min-abundance: [0.0001] generates results with only species relative abundance above this value. Note: .01 = 1%
 * --db: [./emu_database] path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv
@@ -62,15 +62,14 @@ python build_database.py <db_name> --names <names.dmp> --nodes <nodes.dmp> --seq
 Example:
 
 ```bash
-python build_database.py zymo_assembled_db --names example_customdb/names.dmp --nodes example_customdb/nodes.dmp --sequences ./example_customdb/zymo_assembled.fasta --seq2tax ./example_customdb/zymo_assembled_seq2tax.map
+python build_database.py zymo_assembled_db --names example_customdb/ex_names.dmp --nodes example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
 ```
 
 ```bash
-python emu.py example/full_length.fa --db ./zymo_assembled_db
+python emu.py ./example_customdb/ex.fasta --db ./zymo_assembled_db
 ```
 
 
-### Limitations
 
 
 
