@@ -21,10 +21,9 @@ python emu.py --type sr example/short_read_f.fq example/short_read_r.fq
 bioconda...
 
 
-### Options
+### Parameters
 
-#### Algorithm Options
-
+**Algorithm Options**
 * --type: [map-ont] denote type of sequences [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]
 * --min-read-len: [0] drops all sequences below this length; used in long-read only
 * --max-read-len: [5000] drops all sequences above this length; used in long-read only
@@ -32,8 +31,7 @@ bioconda...
 * --db: [./emu_database] path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv
 * --N: [25] max number of alignments utilized for each read
 
-#### Input/Output Options
-
+**Input/Output Options**
 * --output-dir: [./] directory for output results
 * --output: [{input_file}] output filename 
 * --threads: [3] number of threads utilized by minimap2
