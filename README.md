@@ -9,11 +9,11 @@ Emu is a expectation maximization algorithm designed to estimate species-level b
 
 - Calculate abundances Oxford Nanopore single-end:
 ```bash
-python emu.py example/full_length.fa
+./emu abundance example/full_length.fa
 ```
 - Calculate abundances short-read:
 ```bash
-python emu.py --type sr example/short_read_f.fq example/short_read_r.fq
+./emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
 ```
 
 ### Installation
@@ -54,17 +54,17 @@ To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 - seq2taxid.map: headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) species-level tax id.
 
 ```bash
-python build_database.py <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
+./emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
 ```
 
 Example:
 
 ```bash
-python build_database.py zymo_assembled_db --names example_customdb/ex_names.dmp --nodes example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
+./emu build-database zymo_assembled_db --names example_customdb/ex_names.dmp --nodes example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
 ```
 
 ```bash
-python emu.py ./example_customdb/ex.fasta --db ./zymo_assembled_db
+./emu abundance ./example_customdb/ex.fasta --db ./zymo_assembled_db
 ```
 
 
