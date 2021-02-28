@@ -3,17 +3,21 @@
 
 ### Description
 
-Emu is a expectation maximization algorithm designed to estimate species-level bacterial and archael relative abundances of a microbiome sample through full-length 16s nucleotide sequences.
+Emu is a expectation maximization algorithm designed to estimate species-level bacterial and archael relative abundances of a microbiome sample. The method is optimized for full-length 16s nucleotide sequences, but can also be utilized for short-read data as well.
 
 ### Synopsis
 
-- Calculate abundances Oxford Nanopore single-end:
+- Calculate relative abundances for Oxford Nanopore single-end 16s reads:
 ```bash
 ./emu abundance example/full_length.fa
 ```
-- Calculate abundances short-read:
+- Calculate relative abundances for short paired-end 16s data:
 ```bash
 ./emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
+```
+- Calculate relative abundances for short single-end 16s data:
+```bash
+./emu abundance --type sr example/short_read_f.fq
 ```
 
 ### Installation
@@ -23,28 +27,28 @@ bioconda...
 
 ### Parameters
 
-**Algorithm Options**
-* --type: [map-ont] denote type of sequences [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]
-* --min-read-len: [0] drops all sequences below this length; used in long-read only
-* --max-read-len: [5000] drops all sequences above this length; used in long-read only
-* --min-abundance: [0.0001] generates results with only species relative abundance above this value. Note: .01 = 1%
-* --db: [./emu_database] path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv
-* --N: [25] max number of alignments utilized for each read
-
-**Input/Output Options**
-* --output-dir: [./] directory for output results
-* --output: [{input_file}] output filename 
-* --threads: [3] number of threads utilized by minimap2
+| Command	| Default	| Description	|
+| :-------  | :----- | :-------- | 
+|--type	| map-ont	| denote type of sequences [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]	|
+|--min-read-len| 0	| drops all sequences below this length; used in long-read only	|
+|--max-read-len| 5000| drops all sequences above this length; used in long-read only|
+|--min-abundance| 0.0001| generates results with only species relative abundance above this value in addition to full results; .01 = 1%|
+|--db| ./emu_database| path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv|
+|--N| 25| max number of alignments utilized for each read|
+|--output-dir| ./results| directory for output results|
+|--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
+|--threads| 3| number of threads utilized by minimap2|
 
 
 ### Build Custom Database
 
 An emu database consists of 4 files:
-
-- names_df.tsv: tab separated datasheet of database sequence names containing at least columns: 'tax_id' and 'name_txt'
-- nodes_df.tsv: tab separated datasheet of database sequence lineages containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'
-- species_taxid.fasta: database sequences where each sequence header starts with the repsective species-level tax_id preceeding a colon [\<species_taxid>:\<remainder of header>]
-- unique_taxids.tsv: single column tab separated values of unqiue tax_ids in database
+| Filename	| Description	|
+| :-------  | :----- |
+|names_df.tsv| tab separated datasheet of database sequence names containing at least columns: 'tax_id' and 'name_txt'|
+|nodes_df.tsv| tab separated datasheet of database sequence lineages containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'|
+|species_taxid.fasta| database sequences where each sequence header starts with the repsective species-level tax_id preceeding a colon [\<species_taxid>:\<remainder of header>]|
+|unique_taxids.tsv| single column tab separated values of unqiue tax_ids in database|
 
 To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 
