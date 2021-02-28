@@ -1,13 +1,13 @@
-## EMU: relative abundance estimator for full-length 16s reads
+## EMu: relative abundance estimator for full-length 16s reads
 
 
 ### Description
 
-Emu is a expectation maximization algorithm designed to estimate species-level bacterial and archael relative abundances of a microbiome sample. The method is optimized for full-length 16s nucleotide sequences, but can also be utilized for short-read data as well.
+Emu estimates bacterial and archael relative abundances of metagenomic samples at the species-level. The method is optimized for full-length 16s nucleotide sequences, but can also be utilized for short-read data.
 
 ### Synopsis
 
-- Calculate relative abundances for Oxford Nanopore single-end 16s reads:
+- Calculate relative abundances for Oxford Nanopore Technologies single-end 16s reads:
 ```bash
 ./emu abundance example/full_length.fa
 ```
@@ -29,10 +29,10 @@ bioconda...
 
 | Command	| Default	| Description	|
 | :-------  | :----- | :-------- | 
-|--type	| map-ont	| denote type of sequences [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]	|
+|--type	| map-ont	| denote sequencer [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]	|
 |--min-read-len| 0	| drops all sequences below this length; used in long-read only	|
 |--max-read-len| 5000| drops all sequences above this length; used in long-read only|
-|--min-abundance| 0.0001| generates results with only species relative abundance above this value in addition to full results; .01 = 1%|
+|--min-abundance| 0.0001| generates results with species relative abundance above this value in addition to full results; .01 = 1%|
 |--db| ./emu_database| path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv|
 |--N| 25| max number of alignments utilized for each read|
 |--output-dir| ./results| directory for output results|
@@ -45,8 +45,8 @@ bioconda...
 An emu database consists of 4 files:
 | Filename	| Description	|
 | :-------  | :----- |
-|names_df.tsv| tab separated datasheet of database sequence names containing at least columns: 'tax_id' and 'name_txt'|
-|nodes_df.tsv| tab separated datasheet of database sequence lineages containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'|
+|names_df.tsv| tab separated datasheet of database taxonomy names containing at least columns: 'tax_id' and 'name_txt'|
+|nodes_df.tsv| tab separated datasheet of database taxonomy tree containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'|
 |species_taxid.fasta| database sequences where each sequence header starts with the repsective species-level tax_id preceeding a colon [\<species_taxid>:\<remainder of header>]|
 |unique_taxids.tsv| single column tab separated values of unqiue tax_ids in database|
 
