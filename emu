@@ -10,6 +10,7 @@ import pathlib
 import subprocess
 from sys import stdout
 from operator import add, mul
+from pathlib import Path
 
 import math
 import pysam
@@ -245,21 +246,21 @@ def freq_to_lineage_df(freq, tsv_output_path, nodes_df, names_df):
     return results_df
 
 
-def generate_alignments(in_file, out_dir, database, min_len, max_len):
+def generate_alignments(in_file_list, out_basename, database, min_len, max_len):
     """ Generate .sam alignment file
 
-        in_file(str): path to input sequence(s)
-        out_dir(str): path to output directory
+        in_file_list(list(str)): list of path(s) to input sequences
+        out_basename(str): path and basename for output files
         min_len(int): minimum read length included in analysis
         max_len(int): maximum read length included in analysis
     """
+    input_file = " ".join(in_file_list)
     filetype = pathlib.PurePath(args.input_file[0]).suffix
-    input_file = " ".join(in_file)
     if filetype == '.sam':
         return input_file, None
-    sam_align_file = os.path.join(out_dir, "emu_alignments.sam")
+    sam_align_file = f"{out_basename}_emu_alignments.sam"
     db_sequence_file = os.path.join(database, 'species_taxid.fasta')
-    fasta_drop_len = os.path.join(out_dir, "emu_input.fa")
+    fasta_drop_len = f"{out_basename}_emu_input.fa"
     if args.type != 'sr':
         subprocess.check_output(
             f"bioawk -c fastx '(length($seq)<={max_len}"
@@ -416,6 +417,9 @@ if __name__ == "__main__":
         '--output-dir', type=str, default="./results",
         help='output directory name [./results]')
     abundance_parser.add_argument(
+        '--output-basename', type=str,
+        help='basename for all emu output files [{input_file}]')
+    abundance_parser.add_argument(
         '--keep-files', action="store_true",
         help='keep working files in output-dir')
     abundance_parser.add_argument(
@@ -449,21 +453,23 @@ if __name__ == "__main__":
         # set up output paths
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir)
-        out_file = os.path.join(args.output_dir, "emu_abundance_estimate")
+        out_file = os.path.join(args.output_dir, "-".join([Path(v).stem for v in args.input_file]))
+        if args.output_basename:
+            out_file = os.path.join(args.output_dir, args.output_basename)
 
         # perform EM algorithm & generate output
-        sam_file, working_fasta = generate_alignments(args.input_file, args.output_dir, args.db,
+        sam_file, working_fasta = generate_alignments(args.input_file, out_file, args.db,
                                                       args.min_read_len, args.max_read_len)
         log_prob_cigar_op, locs_p_cigar_zero = get_cigar_op_log_probabilities(sam_file)
         log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, locs_p_cigar_zero)
         f_full, f_set_thresh = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
-        freq_to_lineage_df(f_full, out_file, df_nodes, df_names)
+        freq_to_lineage_df(f_full, f"{out_file}_rel-abundance", df_nodes, df_names)
         if f_set_thresh:
             freq_to_lineage_df(
                 f_set_thresh,
-                f"{out_file}_min-abundance-threshold-{args.min_abundance}",
+                f"{out_file}_rel-abundance-threshold-{args.min_abundance}",
                 df_nodes, df_names)
         # clean up extra file
         if not args.keep_files:
