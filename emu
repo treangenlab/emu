@@ -464,7 +464,7 @@ if __name__ == "__main__":
         log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, locs_p_cigar_zero)
         f_full, f_set_thresh = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
-                                                                   .01, args.min_abundance)
+                                                                   1, args.min_abundance)
         freq_to_lineage_df(f_full, f"{out_file}_rel-abundance", df_nodes, df_names)
         if f_set_thresh:
             freq_to_lineage_df(
