@@ -118,6 +118,8 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
                 unassigned_set.add(alignment.query_name)
 
     stdout.write(f"Unassigned read count: {len(unassigned_set)}\n")
+    if len(unassigned_set) == 0:
+        raise ValueError("0 reads assigned")
     return log_p_rgs
 
 
