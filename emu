@@ -388,7 +388,6 @@ def create_reduced_fasta(fasta_dict, db_name):
 
 
 if __name__ == "__main__":
-    DIR = os.path.dirname(__file__)
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
     abundance_parser = subparsers.\
@@ -409,7 +408,7 @@ if __name__ == "__main__":
         '--min-abundance', '-a', type=float, default=0.0001,
         help='min species abundance in results [0.0001]')
     abundance_parser.add_argument(
-        '--db', type=str, default=os.path.join("./", "emu_database"),
+        '--db', type=str, default="./emu_database",
         help='path to emu database containing: names_df.tsv, '
              'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [emu_database]')
     abundance_parser.add_argument(

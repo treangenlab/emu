@@ -9,20 +9,20 @@ Emu estimates bacterial and archael relative abundances of metagenomic samples a
 
 - Calculate relative abundances for Oxford Nanopore Technologies single-end 16s reads:
 ```bash
-./emu abundance example/full_length.fa
+emu abundance example/full_length.fa
 ```
 - Calculate relative abundances for short paired-end 16s data:
 ```bash
-./emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
+emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
 ```
 - Calculate relative abundances for short single-end 16s data:
 ```bash
-./emu abundance --type sr example/short_read_f.fq
+emu abundance --type sr example/short_read_f.fq
 ```
 
 ### Installation
 
-bioconda...
+`conda install -c bioconda emu`
 
 
 ### Parameters
@@ -59,17 +59,17 @@ To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 - seq2taxid.map: headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) species-level tax id.
 
 ```bash
-./emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
+emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
 ```
 
 Example:
 
 ```bash
-./emu build-database zymo_assembled_db --names example_customdb/ex_names.dmp --nodes example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
+emu build-database zymo_assembled_db --names example_customdb/ex_names.dmp --nodes example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
 ```
 
 ```bash
-./emu abundance ./example_customdb/ex.fasta --db ./zymo_assembled_db
+emu abundance ./example_customdb/ex.fasta --db ./zymo_assembled_db
 ```
 
 
