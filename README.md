@@ -1,4 +1,4 @@
-## EMu: species-level taxonomic abundance for full-length 16S reads
+## Emu: species-level taxonomic abundance for full-length 16S reads
 
 
 ### Description
@@ -32,7 +32,9 @@ export EMU_DATABASE_DIR=<path_to_database>
 
 ###### Install Emu via conda
 [install bioconda](https://bioconda.github.io/user/install.html)    
-`conda install -c bioconda emu`
+```bash
+conda install -c bioconda emu
+```
 
 
 
@@ -50,6 +52,7 @@ export EMU_DATABASE_DIR=<path_to_database>
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
 |--threads| 3| number of threads utilized by minimap2|
+
 
 
 ### Build Custom Database
