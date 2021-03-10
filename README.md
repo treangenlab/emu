@@ -1,34 +1,37 @@
-## EMu: relative abundance estimator for full-length 16s reads
+## EMu: species-level taxonomic abundance for full-length 16S reads
 
 
 ### Description
 
-Emu estimates bacterial and archael relative abundances of metagenomic samples at the species-level. The method is optimized for full-length 16s nucleotide sequences, but can also be utilized for short-read data.
+Emu is a relative abundance estimator for 16S genomic sequences. The method is optimized for full-length reads, but can also be utilized for short-read data.
 
 ### Synopsis
 
-- Calculate relative abundances for Oxford Nanopore Technologies single-end 16s reads:
+Calculate relative abundances for Oxford Nanopore Technologies single-end 16s reads:
 ```bash
 emu abundance example/full_length.fa
 ```
-- Calculate relative abundances for short paired-end 16s data:
+Calculate relative abundances for short paired-end 16s data:
 ```bash
 emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
 ```
-- Calculate relative abundances for short single-end 16s data:
+Calculate relative abundances for short single-end 16s data:
 ```bash
 emu abundance --type sr example/short_read_f.fq
 ```
 
 ### Installation
 
-###### download database (or create your own as described below in 'Build Custom Database')
-define '<path_to_database>' as your desired database directory
-'wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C <path_to_database> -xvz --strip-components=2 emu-v1.0.1/emu_database/'
-'export EMU_DATABASE_DIR=<path_to_database>'
+###### Download database (or create your own as described below in 'Build Custom Database')
+define `<path_to_database>` as your desired database directory
 
-###### install Emu via conda
+`wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C <path_to_database> -xvz --strip-components=2 emu-v1.0.1/emu_database/`
+
+`export EMU_DATABASE_DIR=<path_to_database>`
+
+###### Install Emu via conda
 [install bioconda](https://bioconda.github.io/user/install.html)
+
 `conda install -c bioconda emu`
 
 
@@ -41,7 +44,7 @@ define '<path_to_database>' as your desired database directory
 |--min-read-len| 0	| drops all sequences below this length; used in long-read only	|
 |--max-read-len| 5000| drops all sequences above this length; used in long-read only|
 |--min-abundance| 0.0001| generates results with species relative abundance above this value in addition to full results; .01 = 1%|
-|--db| ./emu_database| path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv|
+|--db| $EMU_DATABASE_DIR| path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv|
 |--N| 25| max number of alignments utilized for each read|
 |--output-dir| ./results| directory for output results|
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
@@ -68,7 +71,7 @@ To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 
 ```bash
 emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
-export EMU_DATABASE_DIR=<path_to_database/db_name>
+export EMU_DATABASE_DIR=<db_name>
 ```
 
 Example:
