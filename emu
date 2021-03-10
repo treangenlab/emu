@@ -408,9 +408,9 @@ if __name__ == "__main__":
         '--min-abundance', '-a', type=float, default=0.0001,
         help='min species abundance in results [0.0001]')
     abundance_parser.add_argument(
-        '--db', type=str, default="./emu_database",
+        '--db', type=str, default=os.environ.get("EMU_DATABASE_DIR"),
         help='path to emu database containing: names_df.tsv, '
-             'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [emu_database]')
+             'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [$EMU_DATABASE_DIR]')
     abundance_parser.add_argument(
         '--N', type=int, default=25,
         help='minimap max number of secondary alignments per read [25]')
@@ -447,6 +447,10 @@ if __name__ == "__main__":
 
     if args.subparser_name == "abundance":
         # convert taxonomy files to dataframes
+        if not args.db:
+            raise ValueError("Database not specied. "
+                             "Either 'export EMU_DATABASE_DIR=<path_to_database>' or "
+                             "utilize '--db' paramater.")
         df_nodes = pd.read_csv(os.path.join(args.db, "nodes_df.tsv"), sep='\t').set_index('tax_id')
         df_names = pd.read_csv(os.path.join(args.db, "names_df.tsv"), sep='\t').set_index('tax_id')
         db_species_tids = pd.read_csv(os.path.join(args.db, "unique_taxids.tsv"),

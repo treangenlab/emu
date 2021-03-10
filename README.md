@@ -22,7 +22,15 @@ emu abundance --type sr example/short_read_f.fq
 
 ### Installation
 
+###### download database (or create your own as described below in 'Build Custom Database')
+define '<path_to_database>' as your desired database directory
+'wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C <path_to_database> -xvz --strip-components=2 emu-v1.0.1/emu_database/'
+'export EMU_DATABASE_DIR=<path_to_database>'
+
+###### install Emu via conda
+[install bioconda](https://bioconda.github.io/user/install.html)
 `conda install -c bioconda emu`
+
 
 
 ### Parameters
@@ -60,6 +68,7 @@ To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 
 ```bash
 emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
+export EMU_DATABASE_DIR=<path_to_database/db_name>
 ```
 
 Example:
@@ -72,7 +81,12 @@ emu build-database zymo_assembled_db --names example_customdb/ex_names.dmp --nod
 emu abundance ./example_customdb/ex.fasta --db ./zymo_assembled_db
 ```
 
+If preferred, user can define custom database through the shell variable rather than specifying with each run at the command line.
 
+```bash
+export EMU_DATABASE_DIR=./zymo_assembled_db
+emu abundance ./example_customdb/ex.fasta
+```
 
 
 

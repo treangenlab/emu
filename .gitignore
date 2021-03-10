@@ -4,7 +4,7 @@ __pycache__/
 ._.gitlab-ci.yml
 *.pyc
 *.fxi
-
+.idea/
 
 input/*
 results*
