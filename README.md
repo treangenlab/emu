@@ -25,13 +25,13 @@ emu abundance --type sr example/short_read_f.fq
 ###### Download database (or create your own as described below in 'Build Custom Database')
 define `<path_to_database>` as your desired database directory
 
-`wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C <path_to_database> -xvz --strip-components=2 emu-v1.0.1/emu_database/`
-
-`export EMU_DATABASE_DIR=<path_to_database>`
+```bash
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C <path_to_database> -xvz --strip-components=2 emu-v1.0.1/emu_database/
+export EMU_DATABASE_DIR=<path_to_database>
+```
 
 ###### Install Emu via conda
-[install bioconda](https://bioconda.github.io/user/install.html)
-
+[install bioconda](https://bioconda.github.io/user/install.html)    
 `conda install -c bioconda emu`
 
 
