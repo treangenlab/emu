@@ -1,0 +1,505 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author: kcurry
+"""
+
+import os
+import argparse
+import pathlib
+import subprocess
+from sys import stdout
+from operator import add, mul
+from pathlib import Path
+
+import math
+import pysam
+import numpy as np
+import pandas as pd
+from flatten_dict import unflatten
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+
+# static global variables
+CIGAR_OPS = [1, 4, 8]
+
+def get_align_stats(alignment):
+    """Retrieve list of inquired cigar stats for alignment ['I', 'S', 'X']
+
+        alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
+        return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
+    """
+    return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
+
+
+def get_cigar_op_log_probabilities(sam_path):
+    """P(match), P(mismatch), P(insertion), P(softclipping),
+        by counting how often the corresponding operations occur in the primary alignments
+        and by normalizing over the total sum of operations
+
+        sam_path(str): path to sam file of interest (requires =/X CIGAR operators)
+        return: log probabilities (list(float)) for each cigar operation defined in CIGAR_OPS,
+                    where p > 0
+                zero_locs (list(int)): list of indices (int) where probability == 0
+    """
+    cigar_stats_primary = [0] * len(CIGAR_OPS)
+    # pylint: disable=maybe-no-member
+    sam_pysam = pysam.AlignmentFile(sam_path)
+    for alignment in sam_pysam.fetch():
+        if not alignment.is_secondary and not alignment.is_supplementary \
+                and alignment.reference_name:
+            cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
+    zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
+
+    if zero_locs:
+        for i in sorted(zero_locs, reverse=True):
+            del cigar_stats_primary[i]
+    n_char = sum(cigar_stats_primary)
+    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs
+
+
+def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op):
+    """ log(L(r|s)) = log(P(cigar_op)) × n_cigar_op for cigar_ops: ['I', 'S', 'X']
+
+        alignment(pysam.AlignmentFile): pysam alignment to score
+        cigar_stats(list(int)): list of cigar stats to compute
+        log_p_cigar_op(list(float)): list of cigar_op probabilities corresponding to cigar_stats;
+                                        computed from primary alignments
+        return: log_score (float): log(L(r|s))
+                query_name (str): query name in alignment
+                species_tid (int): species-level taxonomy id corresponding to ref_name
+    """
+
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
+    ref_name, query_name = alignment.reference_name, alignment.query_name
+    species_tid = int(ref_name.split(":")[0])
+    return log_score, query_name, species_tid
+
+
+def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
+    """dict containing log(L(read|seq)) for all pairwise alignments in sam file
+
+        sam_path(str): path to sam file
+        log_p_cigar_op(list(float)): probability for each cigar operation defined in CIGAR_OPS,
+                                        where p > 0
+        zero_locs(list(int)): list of indices (int) where probability == 0
+        return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
+    """
+    # calculate log(L(read|seq)) for all alignments
+    log_p_rgs, unassigned_set = {}, set()
+    # pylint: disable=maybe-no-member
+    sam_filename = pysam.AlignmentFile(sam_path, 'rb')
+
+    if not p_cigar_op_zero_locs:
+        for alignment in sam_filename.fetch():
+            if alignment.reference_name:
+                cigar_stats = get_align_stats(alignment)
+                log_score, query_name, species_tid = \
+                    compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op)
+                if (((query_name, species_tid) not in log_p_rgs or
+                     log_p_rgs[(query_name, species_tid)] < log_score)):
+                    log_p_rgs[(query_name, species_tid)] = log_score
+            else:
+                unassigned_set.add(alignment.query_name)
+    else:
+        for alignment in sam_filename.fetch():
+            if alignment.reference_name:
+                cigar_stats = get_align_stats(alignment)
+                if sum([cigar_stats[x] for x in p_cigar_op_zero_locs]) == 0:
+                    for i in sorted(p_cigar_op_zero_locs, reverse=True):
+                        del cigar_stats[i]
+                    log_score, query_name, species_tid = \
+                        compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op)
+                    if (((query_name, species_tid) not in log_p_rgs or
+                         log_p_rgs[(query_name, species_tid)] < log_score)):
+                        log_p_rgs[(query_name, species_tid)] = log_score
+            else:
+                unassigned_set.add(alignment.query_name)
+
+    stdout.write(f"Unassigned read count: {len(unassigned_set)}\n")
+    return log_p_rgs
+
+
+def expectation_maximization(log_p_rgs, freq):
+    """One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
+            probabilities in log_L_rgs.
+
+        log_p_rgs({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
+        freq{int:float}: dict[species_tax_id]:likelihood species is present in sample
+        returns: f {int:float}: dict[species_tax_id]:updated likelihood species is present in sample
+                total_log_likelihood (float): log likelihood updated f is accurate
+    """
+    # log_p_rns = log(L(r|s))+log(f(s)) for each alignment
+    log_p_rns = {}
+    for (read, seq) in log_p_rgs:
+        if seq in freq and freq[seq] != 0:
+            log_p_rns[(read, seq)] = (log_p_rgs[(read, seq)] + math.log(freq[seq]))
+    log_c = {r: -max(smap.values()) for r, smap in unflatten(log_p_rns).items()}
+    p_rns_c = {(r, s): (math.e ** (v + log_c[r])) for (r, s), v in log_p_rns.items()}
+    p_r_c = {r: sum(s.values()) for r, s in unflatten(p_rns_c).items()}
+
+    # P(s|r), likelihood read r emanates db seq s
+    p_sgr = unflatten({(seq, read): v / p_r_c[read] for (read, seq), v in p_rns_c.items()})
+
+    # update total likelihood and f vector
+    log_p_r = {read: math.log(v) - log_c[read] for read, v in p_r_c.items()}
+    n_reads = len(log_p_r)
+    return {seq: (sum(r_map.values()) / n_reads)
+            for seq, r_map in p_sgr.items()}, sum(log_p_r.values())
+
+
+def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold):
+    """Full expectation maximization algorithm for alignments in log_L_rgs dict
+
+        log_p_rgs{[str,int]:float}: dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
+        db_ids(list(int)): list of each unique species taxonomy id present in database
+        lli_thresh(float): log likelihood increase minimum to continue EM iterations
+        input_threshold(float): minimum relative abundance in output
+        return: {int:float}: dict[species_tax_id]:estimated likelihood species is present in sample
+    """
+    n_db = len(db_ids)
+    n_reads = len(unflatten(log_p_rgs))
+    stdout.write(f"Assigned read count: {n_reads}\n")
+    if n_reads == 0:
+        raise ValueError("0 reads assigned")
+    freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
+
+    # set output abundance threshold
+    freq_thresh = 1/n_reads
+    if n_reads > 1000:
+        freq_thresh = 10/n_reads
+
+    total_log_likelihood = -math.inf
+    while True:
+        freq, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
+
+        # check f vector sums to 1
+        freq_sum = sum(freq.values())
+        if not .9 <= freq_sum <= 1.1:
+            raise ValueError(f"f sums to {freq_sum}, rather than 1")
+
+        # confirm log likelihood increase
+        log_likelihood_diff = updated_log_likelihood - total_log_likelihood
+        total_log_likelihood = updated_log_likelihood
+        if log_likelihood_diff < 0:
+            raise ValueError("total_log_likelihood decreased from prior iteration")
+
+        # exit loop if log likelihood increase less than threshold
+        if log_likelihood_diff < lli_thresh:
+            stdout.write(f"Number of EM iterations: {counter}\n")
+            freq = {k: v for k, v in freq.items() if v >= freq_thresh}
+            freq_full, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
+            freq_set_thresh = None
+            if freq_thresh < input_threshold:
+                freq = {k: v for k, v in freq_full.items() if v >= input_threshold}
+                freq_set_thresh, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
+            return freq_full, freq_set_thresh
+
+        counter += 1
+
+
+def lineage_dict_from_tid(taxid, nodes_df, names_df):
+    """Retrieve dict of lineage for given taxid
+
+        tid(int): tax id to retrieve lineage dict
+        nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'];
+                            tax_id as index
+        names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt']; tax_id as index
+        return {str:str}: dict[rank]:taxonomy name at rank
+    """
+
+    lineage_dict = {}
+    rank = None
+    while rank != "no rank":
+        row = nodes_df.loc[taxid]
+        rank = row["rank"]
+        lineage_dict[rank] = names_df.loc[taxid]["name_txt"]
+        taxid = row["parent_tax_id"]
+    return lineage_dict
+
+
+def freq_to_lineage_df(freq, tsv_output_path, nodes_df, names_df):
+    """Converts freq to a pandas df where each row contains abundance and tax lineage for
+                classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
+
+        freq{int:float}: dict[species_tax_id]:estimated likelihood species is present in sample
+        tsv_output_path(str): path and name of output .tsv file for generated dataframe
+        nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'];
+                            tax_id as index
+        names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt']; tax_id as index
+        returns(df): pandas df with lineage and abundances for values in f
+    """
+
+    results_df = pd.DataFrame(list(zip(freq.keys(), freq.values())),
+                              columns=["tax_id", "abundance"])
+    lineages = results_df["tax_id"].apply(lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
+    results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
+    header_order = ["abundance", "species", "genus", "family", "order", "class",
+                    "phylum", "clade", "superkingdom", "subspecies",
+                    "species subgroup", "species group", "tax_id"]
+    for col in header_order:
+        if col not in results_df.columns:
+            results_df[col] = ""
+    results_df = results_df.sort_values(header_order[8:0:-1]).reset_index(drop=True)
+    results_df = results_df.reindex(header_order, axis=1)
+
+    results_df.to_csv(f"{tsv_output_path}.tsv", index=False, sep='\t')
+    return results_df
+
+
+def generate_alignments(in_file_list, out_basename, database, min_len, max_len):
+    """ Generate .sam alignment file
+
+        in_file_list(list(str)): list of path(s) to input sequences
+        out_basename(str): path and basename for output files
+        min_len(int): minimum read length included in analysis
+        max_len(int): maximum read length included in analysis
+    """
+    input_file = " ".join(in_file_list)
+    filetype = pathlib.PurePath(args.input_file[0]).suffix
+    if filetype == '.sam':
+        return input_file, None
+    sam_align_file = f"{out_basename}_emu_alignments.sam"
+    db_sequence_file = os.path.join(database, 'species_taxid.fasta')
+    fasta_drop_len = f"{out_basename}_emu_input.fa"
+    if args.type != 'sr':
+        subprocess.check_output(
+            f"bioawk -c fastx '(length($seq)<={max_len}"
+            f"&&length($seq)>={min_len}){{print \">\" $name ORS $seq}}' "
+            f"{input_file} > {fasta_drop_len}",
+            shell=True)
+        input_file = fasta_drop_len
+
+    subprocess.check_output(
+            f"minimap2 -x {args.type} -ac -t {args.threads} -N {args.N} -p .9 --eqx "
+            f"{db_sequence_file} {input_file} -o {sam_align_file}",
+            shell=True)
+    return sam_align_file, fasta_drop_len
+
+
+def create_nodes_df(nodes_path):
+    """convert nodes.dmp file into pandas dataframe
+
+        nodes_path(str): path to nodes.dmp file
+        returns(df): pandas df containing 'tax_id', 'parent_tax_id', and 'rank'
+    """
+    node_headers = ['tax_id', 'parent_tax_id', 'rank']
+    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
+    nodes_df.columns = node_headers
+    nodes_df = nodes_df.set_index("tax_id")
+    return nodes_df
+
+
+def create_names_df(names_path):
+    """convert names.dmp file into pandas dataframe
+
+        names_path(str): path to names.dmp file
+        returns(df): pandas df containing ['tax_id','name_txt'] for each row with
+                    'name_class' = 'scientific name'
+    """
+    name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
+    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str)\
+        .drop([1, 3, 5, 7], axis=1)
+    names_df.columns = name_headers
+    names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
+    names_df = names_df.drop(columns=['unique_name', 'name_class'])
+    return names_df
+
+
+def get_species_tid(tid, nodes_df):
+    """ Get species level taxid in lineage for taxid [tid]
+
+        tid(int): taxid for species level or more specific
+        nodes_df(pandas df): pandas df containing columns ['tax_id', 'parent_tax_id', 'rank']
+        return(int): species taxid in lineage
+    """
+    if str(tid) not in nodes_df.index:
+        raise ValueError(f"Taxid:{tid} not found in nodes file")
+    row = nodes_df.loc[str(tid)]
+    while row['rank'] != 'species':
+        parent_tid = row['parent_tax_id']
+        row = nodes_df.loc[str(parent_tid)]
+        if row['rank'] == 'superkingdom':
+            return None
+    return row.name
+
+
+def create_seq2tax_dict(seq2tax_path, nodes_df):
+    """Convert seqid-taxid mapping in seq2tax_path to dict mapping seqid to species level taxid
+
+        seq2tax_path(str): path to seqid-taxid mapping file
+        nodes_df(df): pandas df containing columns ['tax_id', 'parent_tax_id', 'rank']
+        returns {str:int}: dict[seqid] = species taxid
+    """
+    seq2tax_dict, species_id_dict = {}, {}
+    with open(seq2tax_path) as file:
+        for line in file:
+            (seqid, tid) = line.rstrip().split("\t")
+            if tid in species_id_dict.keys():
+                species_tid = species_id_dict[tid]
+            else:
+                species_tid = get_species_tid(tid, nodes_df)
+                species_id_dict[tid] = species_tid
+            seq2tax_dict[seqid] = species_tid
+    return seq2tax_dict
+
+
+def create_unique_seq_dict(db_fasta_path, seq2tax_dict):
+    """ Creates dict of unique sequences to species taxids connected with the sequence
+
+        db_fasta_path(str): path to fasta file of database sequences
+        seq2tax_dict{str:int}: dict[seqid] = species taxid
+        returns {str:{int:[str]}}: dict[seq] = {species_taxid: [list of sequence ids]}
+    """
+    fasta_dict = {}
+    for record in SeqIO.parse(db_fasta_path, "fasta"):
+        tid = seq2tax_dict[record.id]
+        if tid:
+            if record.seq in fasta_dict.keys():
+                if tid in fasta_dict[record.seq].keys():
+                    fasta_dict[record.seq][tid] += [record.description]
+                else:
+                    fasta_dict[record.seq][tid] = [record.description]
+            elif record.seq.reverse_complement() in fasta_dict.keys():
+                if tid in fasta_dict[record.seq.reverse_complement()].keys():
+                    fasta_dict[record.seq.reverse_complement()][tid] += [record.description]
+                else:
+                    fasta_dict[record.seq.reverse_complement()][tid] = [record.description]
+            else:
+                fasta_dict[record.seq] = {tid: [record.description]}
+    return fasta_dict
+
+
+def create_reduced_fasta(fasta_dict, db_name):
+    """ Creates fasta file of taxid for each sequences in fasta_dict with id
+            'species_taxid:db_name:sequence_id'
+
+        fasta_dict{str:{int:[str]}}: dict[seq] = {species_taxid: [list of sequence ids]}
+        db_name(str): name to represent database represented in fasta_dict
+        returns (list[Bio.SeqRecord]): list of sequences for output fasta file
+    """
+    records, count = [], 1
+    for seq, tid_dict in fasta_dict.items():
+        for taxid, descriptions in tid_dict.items():
+            records += [SeqRecord(seq,
+                                  id=f"{taxid}:{db_name}:{count}", description=f"{descriptions}")]
+            count += 1
+    return records
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
+    abundance_parser = subparsers.\
+        add_parser("abundance", help="Generate relative abundance estimates")
+    abundance_parser.add_argument(
+        'input_file', type=str, nargs='+',
+        help='filepath to input nt sequence file')
+    abundance_parser.add_argument(
+        '--type', '-x', choices=['map-ont', 'map-pb', 'sr'], default='map-ont',
+        help='short-read: sr, Pac-Bio:map-pb, ONT:map-ont [map-ont]')
+    abundance_parser.add_argument(
+        '--min-read-len', type=int, default=0,
+        help='minimum read length for long-read data [0]')
+    abundance_parser.add_argument(
+        '--max-read-len', type=int, default=5000,
+        help='maximum read length for long-read data [5000]')
+    abundance_parser.add_argument(
+        '--min-abundance', '-a', type=float, default=0.0001,
+        help='min species abundance in results [0.0001]')
+    abundance_parser.add_argument(
+        '--db', type=str, default=os.environ.get("EMU_DATABASE_DIR"),
+        help='path to emu database containing: names_df.tsv, '
+             'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [$EMU_DATABASE_DIR]')
+    abundance_parser.add_argument(
+        '--N', type=int, default=25,
+        help='minimap max number of secondary alignments per read [25]')
+    abundance_parser.add_argument(
+        '--output-dir', type=str, default="./results",
+        help='output directory name [./results]')
+    abundance_parser.add_argument(
+        '--output-basename', type=str,
+        help='basename for all emu output files [{input_file}]')
+    abundance_parser.add_argument(
+        '--keep-files', action="store_true",
+        help='keep working files in output-dir')
+    abundance_parser.add_argument(
+        '--threads', type=int, default=3,
+        help='threads utilized by minimap [3]')
+
+    build_db_parser = subparsers.add_parser("build-database", help="Build custom Emu database")
+    build_db_parser.add_argument(
+        'db_name', type=str,
+        help='custom database name')
+    build_db_parser.add_argument(
+        '--names', type=str,
+        help='path to names.dmp file')
+    build_db_parser.add_argument(
+        '--nodes', type=str,
+        help='path to nodes.dmp file')
+    build_db_parser.add_argument(
+        '--sequences', type=str,
+        help='path to fasta of database sequences')
+    build_db_parser.add_argument(
+        '--seq2tax', type=str,
+        help='path to tsv mapping species tax id to fasta sequence headers')
+    args = parser.parse_args()
+
+    if args.subparser_name == "abundance":
+        # convert taxonomy files to dataframes
+        if not args.db:
+            raise ValueError("Database not specified. "
+                             "Either 'export EMU_DATABASE_DIR=<path_to_database>' or "
+                             "utilize '--db' parameter.")
+        df_nodes = pd.read_csv(os.path.join(args.db, "nodes_df.tsv"), sep='\t').set_index('tax_id')
+        df_names = pd.read_csv(os.path.join(args.db, "names_df.tsv"), sep='\t').set_index('tax_id')
+        db_species_tids = pd.read_csv(os.path.join(args.db, "unique_taxids.tsv"),
+                                      sep='\t')['tax_id']
+        # set up output paths
+        if not os.path.exists(args.output_dir):
+            os.makedirs(args.output_dir)
+        out_file = os.path.join(args.output_dir, "-".join([Path(v).stem for v in args.input_file]))
+        if args.output_basename:
+            out_file = os.path.join(args.output_dir, args.output_basename)
+
+        # perform EM algorithm & generate output
+        sam_file, working_fasta = generate_alignments(args.input_file, out_file, args.db,
+                                                      args.min_read_len, args.max_read_len)
+        log_prob_cigar_op, locs_p_cigar_zero = get_cigar_op_log_probabilities(sam_file)
+        log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, locs_p_cigar_zero)
+        f_full, f_set_thresh = expectation_maximization_iterations(log_prob_rgs,
+                                                                   db_species_tids,
+                                                                   .01, args.min_abundance)
+        freq_to_lineage_df(f_full, f"{out_file}_rel-abundance", df_nodes, df_names)
+        if f_set_thresh:
+            freq_to_lineage_df(
+                f_set_thresh,
+                f"{out_file}_rel-abundance-threshold-{args.min_abundance}",
+                df_nodes, df_names)
+        # clean up extra file
+        if not args.keep_files:
+            if os.path.exists(sam_file):
+                os.remove(sam_file)
+            if os.path.exists(working_fasta):
+                os.remove(working_fasta)
+
+    if args.subparser_name == "build-database":
+        emu_db_path = os.getcwd()
+        custom_db_path = os.path.join(emu_db_path, args.db_name)
+        if not os.path.exists(custom_db_path):
+            os.makedirs(custom_db_path)
+        stdout.write(f"Emu custom database generating at path: {custom_db_path} ...\n")
+
+        df_names = create_names_df(args.names)
+        df_nodes = create_nodes_df(args.nodes)
+        seq2tax = create_seq2tax_dict(args.seq2tax, df_nodes)
+        dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
+        db_unique_ids = set(seq2tax.values())
+        fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
+
+        df_names.to_csv(os.path.join(custom_db_path, 'names_df.tsv'), sep='\t')
+        df_nodes.to_csv(os.path.join(custom_db_path, 'nodes_df.tsv'), sep='\t')
+        pd.DataFrame(db_unique_ids, columns=['tax_id']). \
+            to_csv(os.path.join(custom_db_path, 'unique_taxids.tsv'), index=False, sep='\t')
+        SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
+        stdout.write("Database creation successful\n")

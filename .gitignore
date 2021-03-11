@@ -1,0 +1,10 @@
+__pycache__/
+._.DS_Store
+.DS_Store
+._.gitlab-ci.yml
+*.pyc
+*.fxi
+.idea/
+
+input/*
+results*

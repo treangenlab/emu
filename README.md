@@ -1,3 +1,101 @@
-# Nano16s
+## Emu: species-level taxonomic abundance for full-length 16S reads
 
-full-length 16s classification software
+
+### Description
+
+Emu is a relative abundance estimator for 16S genomic sequences. The method is optimized for full-length reads, but can also be utilized for short-read data.
+
+### Synopsis
+
+Calculate relative abundances for Oxford Nanopore Technologies single-end 16s reads:
+```bash
+emu abundance example/full_length.fa
+```
+Calculate relative abundances for short paired-end 16s data:
+```bash
+emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
+```
+Calculate relative abundances for short single-end 16s data:
+```bash
+emu abundance --type sr example/short_read_f.fq
+```
+
+### Installation
+
+###### Download database (or create your own as described below in 'Build Custom Database')
+define `<path_to_database>` as your desired database directory
+
+```bash
+export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v1.0.1/emu_database/
+```
+
+###### Install Emu via conda
+Install conda, add the bioconda channel, and install Emu.
+```bash
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+conda install emu
+```
+
+
+
+### Parameters
+
+| Command	| Default	| Description	|
+| :-------  | :----- | :-------- | 
+|--type	| map-ont	| denote sequencer [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]	|
+|--min-read-len| 0	| drops all sequences below this length; used in long-read only	|
+|--max-read-len| 5000| drops all sequences above this length; used in long-read only|
+|--min-abundance| 0.0001| generates results with species relative abundance above this value in addition to full results; .01 = 1%|
+|--db| $EMU_DATABASE_DIR| path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv|
+|--N| 25| max number of alignments utilized for each read|
+|--output-dir| ./results| directory for output results|
+|--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
+|--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
+|--threads| 3| number of threads utilized by minimap2|
+
+
+
+### Build Custom Database
+
+An emu database consists of 4 files:
+| Filename	| Description	|
+| :-------  | :----- |
+|names_df.tsv| tab separated datasheet of database taxonomy names containing at least columns: 'tax_id' and 'name_txt'|
+|nodes_df.tsv| tab separated datasheet of database taxonomy tree containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'|
+|species_taxid.fasta| database sequences where each sequence header starts with the repsective species-level tax_id preceeding a colon [\<species_taxid>:\<remainder of header>]|
+|unique_taxids.tsv| single column tab separated values of unqiue tax_ids in database|
+
+To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
+
+- names.dmp: names file from NCBI taxonomy dump
+- nodes.dmp: nodes file from NCBI taxonomy dump
+- database.fasta: nucleotide sequences
+- seq2taxid.map: headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) species-level tax id.
+
+```bash
+emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
+```
+
+Example:
+
+```bash
+emu build-database zymo_assembled_db --names example_customdb/ex_names.dmp --nodes example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
+```
+
+```bash
+emu abundance ./example_customdb/ex.fasta --db ./zymo_assembled_db
+```
+
+If preferred, user can define custom database through the shell variable rather than specifying with each run at the command line.
+
+```bash
+export EMU_DATABASE_DIR=./zymo_assembled_db
+emu abundance ./example_customdb/ex.fasta
+```
+
+
+
+
