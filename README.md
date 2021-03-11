@@ -26,8 +26,8 @@ emu abundance --type sr example/short_read_f.fq
 define `<path_to_database>` as your desired database directory
 
 ```bash
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C <path_to_database> -xvz --strip-components=2 emu-v1.0.1/emu_database/
 export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v1.0.1/emu_database/
 ```
 
 ###### Install Emu via conda
@@ -74,7 +74,6 @@ To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 
 ```bash
 emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
-export EMU_DATABASE_DIR=<db_name>
 ```
 
 Example:
