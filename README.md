@@ -31,9 +31,12 @@ wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz 
 ```
 
 ###### Install Emu via conda
-[install bioconda](https://bioconda.github.io/user/install.html)    
+Install conda, add the bioconda channel, and install Emu.
 ```bash
-conda install -c bioconda emu
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+conda install emu
 ```
 
 
