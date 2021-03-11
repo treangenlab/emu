@@ -448,9 +448,9 @@ if __name__ == "__main__":
     if args.subparser_name == "abundance":
         # convert taxonomy files to dataframes
         if not args.db:
-            raise ValueError("Database not specied. "
+            raise ValueError("Database not specified. "
                              "Either 'export EMU_DATABASE_DIR=<path_to_database>' or "
-                             "utilize '--db' paramater.")
+                             "utilize '--db' parameter.")
         df_nodes = pd.read_csv(os.path.join(args.db, "nodes_df.tsv"), sep='\t').set_index('tax_id')
         df_names = pd.read_csv(os.path.join(args.db, "names_df.tsv"), sep='\t').set_index('tax_id')
         db_species_tids = pd.read_csv(os.path.join(args.db, "unique_taxids.tsv"),
