@@ -1,5 +1,22 @@
-emu_default:
+image: continuumio/anaconda3:latest
+
+before_script:
+  - conda env create -f environment.yml
+  - source activate emu-conda
+  - export EMU_DATABASE_DIR=./emu_database
+
+test1:
   stage: test
-  image: python:3.7 
   script:
-    - echo "test"
+    - python emu abundance example/full_length.fa
+
+test2:
+  stage: test
+  script:
+    - python emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
+
+test3:
+  stage: test
+  script:
+    - python emu abundance --type sr example/short_read_f.fq
+
