@@ -1,7 +1,9 @@
 image: continuumio/anaconda3:latest
 
 before_script:
-  - if ! [[ conda env list | grep -q 'emu-conda' == *"emu-conda"* ]]; then
+  - if conda env list | grep -q 'emu-conda'; then
+  - echo "emu-conda environment already found. Skipping creation..."
+  - else
   - conda env create -f environment.yml
   - fi;
   - source activate emu-conda
