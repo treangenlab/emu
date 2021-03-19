@@ -1,7 +1,9 @@
 image: continuumio/anaconda3:latest
 
 before_script:
+  - if [! [conda env list | grep -q 'emu-conda']]; then
   - conda env create -f environment.yml
+  - fi;
   - source activate emu-conda
   - export EMU_DATABASE_DIR=./emu_database
 
