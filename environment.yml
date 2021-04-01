@@ -1,4 +1,4 @@
-name: emu-conda
+name: emu
 
 channels:
   - bioconda
