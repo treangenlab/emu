@@ -210,8 +210,10 @@ def lineage_dict_from_tid(taxid, nodes_df, names_df):
 
     lineage_dict = {}
     rank = None
-    while rank != "no rank":
+    prev_rank = None
+    while prev_rank != "superkingdom":
         row = nodes_df.loc[taxid]
+        prev_rank = rank
         rank = row["rank"]
         lineage_dict[rank] = names_df.loc[taxid]["name_txt"]
         taxid = row["parent_tax_id"]
@@ -258,6 +260,7 @@ def generate_alignments(in_file_list, out_basename, database, min_len, max_len):
     input_file = " ".join(in_file_list)
     filetype = pathlib.PurePath(args.input_file[0]).suffix
     if filetype == '.sam':
+        args.keep_files = True
         return input_file, None
     sam_align_file = f"{out_basename}_emu_alignments.sam"
     db_sequence_file = os.path.join(database, 'species_taxid.fasta')
