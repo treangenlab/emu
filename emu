@@ -391,7 +391,9 @@ def create_reduced_fasta(fasta_dict, db_name):
 
 
 if __name__ == "__main__":
+    __version__ = "0.1.2"
     parser = argparse.ArgumentParser()
+    parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
     abundance_parser = subparsers.\
         add_parser("abundance", help="Generate relative abundance estimates")

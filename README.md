@@ -52,7 +52,7 @@ NOTE: with this installation method, all commands will need to be run with `<pat
 
 
 
-### Parameters
+### Abundance Estimation Parameters
 
 | Command	| Default	| Description	|
 | :-------  | :----- | :-------- | 
