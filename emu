@@ -29,7 +29,10 @@ def get_align_stats(alignment):
         alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
         return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
     """
-    return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
+    #return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
+    cigar_stats = alignment.get_cigar_stats()[0]
+    n_mismatch = cigar_stats[10] - cigar_stats[1] - cigar_stats[0]
+    return [cigar_stats[1], cigar_stats[4], n_mismatch]
 
 
 def get_cigar_op_log_probabilities(sam_path):
