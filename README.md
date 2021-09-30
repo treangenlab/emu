@@ -76,7 +76,7 @@ An emu database consists of 4 files:
 | :-------  | :----- |
 |names_df.tsv| tab separated datasheet of database taxonomy names containing at least columns: 'tax_id' and 'name_txt'|
 |nodes_df.tsv| tab separated datasheet of database taxonomy tree containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'|
-|species_taxid.fasta| database sequences where each sequence header starts with the repsective species-level tax_id preceeding a colon [\<species_taxid>:\<remainder of header>]|
+|species_taxid.fasta| database sequences where each sequence header starts with the respective species-level tax id (or lowest level above species-level if missing) preceeding a colon [\<species_taxid>:\<remainder of header>]|
 |unique_taxids.tsv| single column tab separated values of unqiue tax_ids in database|
 
 To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
@@ -84,7 +84,7 @@ To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 - names.dmp: names file from NCBI taxonomy dump
 - nodes.dmp: nodes file from NCBI taxonomy dump
 - database.fasta: nucleotide sequences
-- seq2taxid.map: headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) species-level tax id.
+- seq2taxid.map: headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) tax id.
 
 ```bash
 emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
@@ -93,7 +93,7 @@ emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences
 Example:
 
 ```bash
-emu build-database zymo_assembled_db --names example_customdb/ex_names.dmp --nodes example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
+emu build-database zymo_assembled_db --names ./example_customdb/ex_names.dmp --nodes ./example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
 ```
 
 ```bash

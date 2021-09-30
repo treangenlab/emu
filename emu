@@ -330,7 +330,7 @@ def create_names_df(names_path):
 
 
 def get_species_tid(tid, nodes_df):
-    """ Get species level taxid in lineage for taxid [tid]
+    """ Get lowest taxid down to species-level in lineage for taxid [tid]
 
         tid(int): taxid for species level or more specific
         nodes_df(pandas df): pandas df containing columns ['tax_id', 'parent_tax_id', 'rank']
@@ -339,11 +339,9 @@ def get_species_tid(tid, nodes_df):
     if str(tid) not in nodes_df.index:
         raise ValueError(f"Taxid:{tid} not found in nodes file")
     row = nodes_df.loc[str(tid)]
-    while row['rank'] != 'species':
+    while row['rank'] not in ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']:
         parent_tid = row['parent_tax_id']
         row = nodes_df.loc[str(parent_tid)]
-        if row['rank'] == 'superkingdom':
-            return None
     return row.name
 
 
@@ -363,7 +361,6 @@ def create_seq2tax_dict(seq2tax_path, nodes_df):
             else:
                 species_tid = get_species_tid(tid, nodes_df)
                 species_id_dict[tid] = species_tid
-            seq2tax_dict[seqid] = species_tid
     return seq2tax_dict
 
 
