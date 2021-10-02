@@ -110,7 +110,7 @@ emu abundance ./example_customdb/ex.fasta
 
 ### Collapse Taxonomy
 
-The collapse-taxonomy function can be used on any emu output <.tsv>file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:<input_file>-<rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+The collapse-taxonomy function can be used on any emu output <.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:<input_file>-<rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 
 ```bash
 emu collapse-taxonomy <file_path> <rank>
