@@ -22,6 +22,32 @@ from Bio.SeqRecord import SeqRecord
 
 # static global variables
 CIGAR_OPS = [1, 4, 8]
+TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
+
+def validate_input(path):
+    """Validate input file is either: fasta, fastq, or sam alignement file.
+
+        path(str): path to input file
+    """
+    # pass if input is sam file
+    sam_pysam = None
+    try:
+        # pylint: disable=maybe-no-member
+        sam_pysam = pysam.AlignmentFile(path)
+    except (ValueError, OSError):
+        pass
+    if sam_pysam:
+        return
+
+    # fail if input is not fasta/q
+    fasta_rd, fastq_rd = None, None
+    try:
+        fasta_rd = SeqIO.to_dict(SeqIO.parse(path, "fasta"))
+        fastq_rd = SeqIO.to_dict(SeqIO.parse(path, "fastq"))
+    except (UnicodeDecodeError, ValueError):
+        pass
+    if not (fasta_rd or fastq_rd):
+        raise TypeError("Input must be in desired format: fasta or fastq")
 
 def get_align_stats(alignment):
     """Retrieve list of inquired cigar stats for alignment ['I', 'S', 'X']
@@ -310,7 +336,7 @@ def create_names_df(names_path):
 
 
 def get_species_tid(tid, nodes_df):
-    """ Get species level taxid in lineage for taxid [tid]
+    """ Get lowest taxid down to species-level in lineage for taxid [tid]
 
         tid(int): taxid for species level or more specific
         nodes_df(pandas df): pandas df containing columns ['tax_id', 'parent_tax_id', 'rank']
@@ -319,11 +345,9 @@ def get_species_tid(tid, nodes_df):
     if str(tid) not in nodes_df.index:
         raise ValueError(f"Taxid:{tid} not found in nodes file")
     row = nodes_df.loc[str(tid)]
-    while row['rank'] != 'species':
+    while row['rank'] not in TAXONOMY_RANKS:
         parent_tid = row['parent_tax_id']
         row = nodes_df.loc[str(parent_tid)]
-        if row['rank'] == 'superkingdom':
-            return None
     return row.name
 
 
@@ -389,9 +413,28 @@ def create_reduced_fasta(fasta_dict, db_name):
             count += 1
     return records
 
+def collapse_rank(path, rank):
+    """ Stores a version of emu-output (path) collapsed at the specified taxonomic rank in same
+            folder as input.
+
+        path(str): path to emu output
+        rank(str): taxonomic rank for collapsed abundance: ["species", "genus", "family",
+            "order", "class", "phylum", "clade", "superkingdom"]
+    """
+    df_emu = pd.read_csv(path,sep='\t')
+    tax_order = list(df_emu.columns[1:9])
+    if rank not in tax_order:
+        raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
+    taxa_remaining = tax_order[tax_order.index(rank):]
+    df_emu = df_emu[['abundance'] + taxa_remaining]
+    df_emu = df_emu.groupby(taxa_remaining, dropna=False).sum()
+    output_path = f"{os.path.splitext(path)[0]}-{rank}.tsv"
+    df_emu.to_csv(output_path, sep='\t')
+    stdout.write(f"File generated: {output_path}\n")
+
 
 if __name__ == "__main__":
-    __version__ = "0.1.2"
+    __version__ = "1.0.3"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -448,9 +491,22 @@ if __name__ == "__main__":
     build_db_parser.add_argument(
         '--seq2tax', type=str,
         help='path to tsv mapping species tax id to fasta sequence headers')
+
+    collapse_parser = subparsers.add_parser("collapse-taxonomy",
+                                            help="Collapse emu output at specified taxonomic rank")
+    collapse_parser.add_argument(
+        'input_path', type=str,
+        help='emu output filepath')
+    collapse_parser.add_argument(
+        'rank', type=str,
+        help='collapsed taxonomic rank')
     args = parser.parse_args()
 
+
     if args.subparser_name == "abundance":
+        # check input file is fasta/q or sam alignment file
+        validate_input(args.input_file[0])
+
         # convert taxonomy files to dataframes
         if not args.db:
             raise ValueError("Database not specified. "
@@ -460,6 +516,7 @@ if __name__ == "__main__":
         df_names = pd.read_csv(os.path.join(args.db, "names_df.tsv"), sep='\t').set_index('tax_id')
         db_species_tids = pd.read_csv(os.path.join(args.db, "unique_taxids.tsv"),
                                       sep='\t')['tax_id']
+
         # set up output paths
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir)
@@ -481,6 +538,7 @@ if __name__ == "__main__":
                 f_set_thresh,
                 f"{out_file}_rel-abundance-threshold-{args.min_abundance}",
                 df_nodes, df_names)
+
         # clean up extra file
         if not args.keep_files:
             if os.path.exists(sam_file):
@@ -508,3 +566,6 @@ if __name__ == "__main__":
             to_csv(os.path.join(custom_db_path, 'unique_taxids.tsv'), index=False, sep='\t')
         SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
         stdout.write("Database creation successful\n")
+
+    if args.subparser_name == "collapse-taxonomy":
+        collapse_rank(args.input_path, args.rank)
