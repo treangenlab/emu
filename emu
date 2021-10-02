@@ -22,11 +22,17 @@ from Bio.SeqRecord import SeqRecord
 
 # static global variables
 CIGAR_OPS = [1, 4, 8]
+TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 def validate_input(path):
+    """Validate input file is either: fasta, fastq, or sam alignement file.
+
+        path(str): path to input file
+    """
     # pass if input is sam file
     sam_pysam = None
     try:
+        # pylint: disable=maybe-no-member
         sam_pysam = pysam.AlignmentFile(path)
     except (ValueError, OSError):
         pass
@@ -339,7 +345,7 @@ def get_species_tid(tid, nodes_df):
     if str(tid) not in nodes_df.index:
         raise ValueError(f"Taxid:{tid} not found in nodes file")
     row = nodes_df.loc[str(tid)]
-    while row['rank'] not in ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']:
+    while row['rank'] not in TAXONOMY_RANKS:
         parent_tid = row['parent_tax_id']
         row = nodes_df.loc[str(parent_tid)]
     return row.name
@@ -361,6 +367,7 @@ def create_seq2tax_dict(seq2tax_path, nodes_df):
             else:
                 species_tid = get_species_tid(tid, nodes_df)
                 species_id_dict[tid] = species_tid
+            seq2tax_dict[seqid] = species_tid
     return seq2tax_dict
 
 
@@ -405,6 +412,25 @@ def create_reduced_fasta(fasta_dict, db_name):
                                   id=f"{taxid}:{db_name}:{count}", description=f"{descriptions}")]
             count += 1
     return records
+
+def collapse_rank(path, rank):
+    """ Stores a version of emu-output (path) collapsed at the specified taxonomic rank in same
+            folder as input.
+
+        path(str): path to emu output
+        rank(str): taxonomic rank for collapsed abundance: ["species", "genus", "family",
+            "order", "class", "phylum", "clade", "superkingdom"]
+    """
+    df_emu = pd.read_csv(path,sep='\t')
+    tax_order = list(df_emu.columns[1:9])
+    if rank not in tax_order:
+        raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
+    taxa_remaining = tax_order[tax_order.index(rank):]
+    df_emu = df_emu[['abundance'] + taxa_remaining]
+    df_emu = df_emu.groupby(taxa_remaining, dropna=False).sum()
+    output_path = f"{os.path.splitext(path)[0]}-{rank}.tsv"
+    df_emu.to_csv(output_path, sep='\t')
+    stdout.write(f"File generated: {output_path}\n")
 
 
 if __name__ == "__main__":
@@ -465,7 +491,17 @@ if __name__ == "__main__":
     build_db_parser.add_argument(
         '--seq2tax', type=str,
         help='path to tsv mapping species tax id to fasta sequence headers')
+
+    collapse_parser = subparsers.add_parser("collapse-taxonomy",
+                                            help="Collapse emu output at specified taxonomic rank")
+    collapse_parser.add_argument(
+        'input_path', type=str,
+        help='emu output filepath')
+    collapse_parser.add_argument(
+        'rank', type=str,
+        help='collapsed taxonomic rank')
     args = parser.parse_args()
+
 
     if args.subparser_name == "abundance":
         # check input file is fasta/q or sam alignment file
@@ -530,3 +566,6 @@ if __name__ == "__main__":
             to_csv(os.path.join(custom_db_path, 'unique_taxids.tsv'), index=False, sep='\t')
         SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
         stdout.write("Database creation successful\n")
+
+    if args.subparser_name == "collapse-taxonomy":
+        collapse_rank(args.input_path, args.rank)
