@@ -43,7 +43,7 @@ conda install emu
 If you are unable to install Emu via conda as described above, an alternative approach is to install conda and create an environment that supports Emu. The default name of the environment created is `emu`, but this can be configured in the `environment.yml` file if desired. The environment will need to be activated before Emu can be run.
 ```bash
 conda env create -f environment.yml
-conda activate <name_of_environment>
+conda activate custom-emu
 ```
 NOTE: with this installation method, all commands will need to be run with `<path to emu>` instead of `emu`. For example, in the directory containing the Emu script, a working command would be:
 ```bash
