@@ -30,7 +30,7 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v1.0.1/emu_database/
 ```
 
-###### Install Emu via conda
+###### Option 1: Install Emu via conda
 Install conda, add the bioconda channel, and install Emu.
 ```bash
 conda config --add channels defaults
@@ -39,8 +39,8 @@ conda config --add channels conda-forge
 conda install emu
 ```
 
-###### Create local Emu conda environment
-Install conda, and create an environment that supports Emu. The default name of the environment created is `emu`, but this can be configured in the `environment.yml` file if desired. The environment will need to be activated before Emu can be run.
+###### Option 2: Create local Emu conda environment
+If you are unable to install Emu via conda as described above, an alternative approach is to install conda and create an environment that supports Emu. The default name of the environment created is `emu`, but this can be configured in the `environment.yml` file if desired. The environment will need to be activated before Emu can be run.
 ```bash
 conda env create -f environment.yml
 conda activate <name_of_environment>
