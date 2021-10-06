@@ -31,8 +31,8 @@ def get_align_stats(alignment):
     """
     #return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
     cigar_stats = alignment.get_cigar_stats()[0]
-    n_mismatch = cigar_stats[10] - cigar_stats[1] - cigar_stats[2]
-    return [cigar_stats[1], cigar_stats[4], n_mismatch]
+    n_mismatch, n_clip = cigar_stats[10] - cigar_stats[1] - cigar_stats[2], cigar_stats[4] + cigar_stats[5]
+    return [cigar_stats[1], n_clip, n_mismatch]
 
 
 def get_cigar_op_log_probabilities(sam_path):
