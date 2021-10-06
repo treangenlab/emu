@@ -21,7 +21,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # static global variables
-CIGAR_OPS = [1, 2, 4, 7, 8]
+CIGAR_OPS = [1, 2, 4, 8]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 
@@ -60,6 +60,14 @@ def get_align_stats(alignment):
     return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
 
 
+def get_align_len(alignment):
+    """Retrieve list of inquired cigar stats for alignment ['I', 'S', 'X']
+
+        alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
+        return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
+    """
+    return sum([alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS+[7]])
+
 def get_cigar_op_log_probabilities(sam_path):
     """P(match), P(mismatch), P(insertion), P(softclipping),
         by counting how often the corresponding operations occur in the primary alignments
@@ -75,11 +83,12 @@ def get_cigar_op_log_probabilities(sam_path):
     # pylint: disable=maybe-no-member
     sam_pysam = pysam.AlignmentFile(sam_path)
     for alignment in sam_pysam.fetch():
-        dict_longest_align[alignment.query_name] = max(sum(get_align_stats(alignment)),
+        dict_longest_align[alignment.query_name] = max(get_align_len(alignment),
                                                        int(dict_longest_align.get(alignment.query_name) or 0))
         if not alignment.is_secondary and not alignment.is_supplementary \
                 and alignment.reference_name:
             cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
+
     zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
 
     if zero_locs:
@@ -103,9 +112,9 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 
     #log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
     ref_name, query_name = alignment.reference_name, alignment.query_name
-    n = sum(cigar_stats)
-    cigar_percent = [(v/n*(dict_longest_align[query_name])) for v in cigar_stats]
-    log_score = sum(list(map(mul, log_p_cigar_op, cigar_percent)))
+    n = get_align_len(alignment)
+    cigar_stats_normalized = [(v*(dict_longest_align[query_name]/n)) for v in cigar_stats]
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats_normalized)))
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
