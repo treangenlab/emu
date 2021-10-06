@@ -21,7 +21,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # static global variables
-CIGAR_OPS = [1, 4, 8]
+CIGAR_OPS = [1, 2, 4, 7, 8]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 def validate_input(path):
@@ -96,7 +96,10 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op):
                 species_tid (int): species-level taxonomy id corresponding to ref_name
     """
 
-    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
+    #log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
+    n = sum(cigar_stats)
+    cigar_percent = [(v/n*100) for v in cigar_stats]
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_percent)))
     ref_name, query_name = alignment.reference_name, alignment.query_name
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
