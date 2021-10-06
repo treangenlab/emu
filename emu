@@ -21,7 +21,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # static global variables
-CIGAR_OPS = [1, 4, 8]
+CIGAR_OPS = [1, 4, 7, 8]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 def validate_input(path):
@@ -55,7 +55,12 @@ def get_align_stats(alignment):
         alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
         return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
     """
-    return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
+    #return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
+
+    cigar_stats = alignment.get_cigar_stats()[0]
+    n_mismatch = cigar_stats[10] - cigar_stats[1] - cigar_stats[2]
+    return [cigar_stats[0], cigar_stats[1], cigar_stats[4], n_mismatch]
+
 
 
 def get_cigar_op_log_probabilities(sam_path):
@@ -81,7 +86,8 @@ def get_cigar_op_log_probabilities(sam_path):
         for i in sorted(zero_locs, reverse=True):
             del cigar_stats_primary[i]
     n_char = sum(cigar_stats_primary)
-    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs
+    #return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs
+    return [x for x in np.array(cigar_stats_primary)/n_char], zero_locs
 
 
 def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op):
@@ -96,7 +102,12 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op):
                 species_tid (int): species-level taxonomy id corresponding to ref_name
     """
 
-    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
+    #log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
+    n = sum(cigar_stats)
+    cigar_stats_prob = [v/n for v in cigar_stats]
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats_prob)))
+
+
     ref_name, query_name = alignment.reference_name, alignment.query_name
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
@@ -159,16 +170,16 @@ def expectation_maximization(log_p_rgs, freq):
     log_p_rns = {}
     for (read, seq) in log_p_rgs:
         if seq in freq and freq[seq] != 0:
-            log_p_rns[(read, seq)] = (log_p_rgs[(read, seq)] + math.log(freq[seq]))
-    log_c = {r: -max(smap.values()) for r, smap in unflatten(log_p_rns).items()}
-    p_rns_c = {(r, s): (math.e ** (v + log_c[r])) for (r, s), v in log_p_rns.items()}
-    p_r_c = {r: sum(s.values()) for r, s in unflatten(p_rns_c).items()}
+            log_p_rns[(read, seq)] = (log_p_rgs[(read, seq)] * freq[seq])
+    #log_c = {r: -max(smap.values()) for r, smap in unflatten(log_p_rns).items()}
+    #p_rns_c = {(r, s): (math.e ** (v + log_c[r])) for (r, s), v in log_p_rns.items()}
+    p_r_c = {r: sum(s.values()) for r, s in unflatten(log_p_rns).items()}
 
     # P(s|r), likelihood read r emanates db seq s
-    p_sgr = unflatten({(seq, read): v / p_r_c[read] for (read, seq), v in p_rns_c.items()})
+    p_sgr = unflatten({(seq, read): v / p_r_c[read] for (read, seq), v in log_p_rns.items()})
 
     # update total likelihood and f vector
-    log_p_r = {read: math.log(v) - log_c[read] for read, v in p_r_c.items()}
+    log_p_r = {read: math.log(v) for read, v in p_r_c.items()}
     n_reads = len(log_p_r)
     return {seq: (sum(r_map.values()) / n_reads)
             for seq, r_map in p_sgr.items()}, sum(log_p_r.values())
@@ -463,7 +474,7 @@ if __name__ == "__main__":
         '--N', type=int, default=25,
         help='minimap max number of secondary alignments per read [25]')
     abundance_parser.add_argument(
-        '--output-dir', type=str, default="./results",
+        '--output-dir', type=str, default="./results_scoringscheme",
         help='output directory name [./results]')
     abundance_parser.add_argument(
         '--output-basename', type=str,
