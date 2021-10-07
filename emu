@@ -102,7 +102,7 @@ def get_cigar_op_log_probabilities(sam_path):
            dict_longest_align
 
 
-def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_align):
+def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_align, align_len):
     """ log(L(r|s)) = log(P(cigar_op)) × n_cigar_op for CIGAR_OPS
 
         alignment(pysam.AlignmentFile): pysam alignment to score
@@ -110,13 +110,13 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
         log_p_cigar_op(list(float)): list of cigar_op probabilities corresponding to cigar_stats;
                                         computed from primary alignments
         dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
+        align_len (int): number of columns in the alignment
         return: log_score (float): log(L(r|s))
                 query_name (str): query name in alignment
                 species_tid (int): species-level taxonomy id corresponding to ref_name
     """
 
     ref_name, query_name = alignment.reference_name, alignment.query_name
-    align_len = get_align_len(alignment)
     cigar_stats_normalized = [(v*(dict_longest_align[query_name]/align_len)) for v in cigar_stats]
     log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats_normalized)))
     species_tid = int(ref_name.split(":")[0])
@@ -140,10 +140,12 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
 
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch():
-            if alignment.reference_name:
+            align_len = get_align_len(alignment)
+            if alignment.reference_name and align_len:
                 cigar_stats = get_align_stats(alignment)
                 log_score, query_name, species_tid = \
-                    compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_align)
+                    compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
+                                         dict_longest_align, align_len)
                 if (((query_name, species_tid) not in log_p_rgs or
                      log_p_rgs[(query_name, species_tid)] < log_score)):
                     log_p_rgs[(query_name, species_tid)] = log_score
@@ -151,14 +153,15 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                 unassigned_set.add(alignment.query_name)
     else:
         for alignment in sam_filename.fetch():
-            if alignment.reference_name:
+            align_len = get_align_len(alignment)
+            if alignment.reference_name and align_len:
                 cigar_stats = get_align_stats(alignment)
                 if sum([cigar_stats[x] for x in p_cigar_op_zero_locs]) == 0:
                     for i in sorted(p_cigar_op_zero_locs, reverse=True):
                         del cigar_stats[i]
                     log_score, query_name, species_tid = \
                         compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
-                                             dict_longest_align)
+                                             dict_longest_align, align_len)
                     if (((query_name, species_tid) not in log_p_rgs or
                          log_p_rgs[(query_name, species_tid)] < log_score)):
                         log_p_rgs[(query_name, species_tid)] = log_score
