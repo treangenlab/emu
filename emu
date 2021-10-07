@@ -22,6 +22,7 @@ from Bio.SeqRecord import SeqRecord
 
 # static global variables
 CIGAR_OPS = [1, 2, 4, 8]
+CIGAR_OPS_ALL = [1, 2, 4, 7, 8]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 
@@ -52,7 +53,7 @@ def validate_input(path):
 
 
 def get_align_stats(alignment):
-    """Retrieve list of inquired cigar stats for alignment ['I', 'S', 'X']
+    """Retrieve list of inquired cigar stats (defined by CIGAR_OPS) for alignment
 
         alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
         return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
@@ -61,30 +62,32 @@ def get_align_stats(alignment):
 
 
 def get_align_len(alignment):
-    """Retrieve list of inquired cigar stats for alignment ['I', 'S', 'X']
+    """Retrieve number of columns in alignment
 
         alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
-        return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
+        return (int): number of columns in alignment
     """
-    return sum([alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS+[7]])
+    return sum([alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS_ALL])
 
 def get_cigar_op_log_probabilities(sam_path):
-    """P(match), P(mismatch), P(insertion), P(softclipping),
-        by counting how often the corresponding operations occur in the primary alignments
-        and by normalizing over the total sum of operations
+    """P(align_type) for each type in CIGAR_OPS by counting how often the corresponding
+            operations occur in the primary alignments and by normalizing over the total
+            sum of operations.
 
         sam_path(str): path to sam file of interest (requires =/X CIGAR operators)
         return: log probabilities (list(float)) for each cigar operation defined in CIGAR_OPS,
                     where p > 0
                 zero_locs (list(int)): list of indices (int) where probability == 0
+                dict_longest_align (dict[str]:(int)): dict of max alignment length
+                    for each query read
     """
     cigar_stats_primary = [0] * len(CIGAR_OPS)
     dict_longest_align = {}
     # pylint: disable=maybe-no-member
     sam_pysam = pysam.AlignmentFile(sam_path)
     for alignment in sam_pysam.fetch():
-        dict_longest_align[alignment.query_name] = max(get_align_len(alignment),
-                                                       int(dict_longest_align.get(alignment.query_name) or 0))
+        dict_longest_align[alignment.query_name] = \
+            max(get_align_len(alignment), int(dict_longest_align.get(alignment.query_name) or 0))
         if not alignment.is_secondary and not alignment.is_supplementary \
                 and alignment.reference_name:
             cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
@@ -95,25 +98,26 @@ def get_cigar_op_log_probabilities(sam_path):
         for i in sorted(zero_locs, reverse=True):
             del cigar_stats_primary[i]
     n_char = sum(cigar_stats_primary)
-    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs, dict_longest_align
+    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs, \
+           dict_longest_align
 
 
 def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_align):
-    """ log(L(r|s)) = log(P(cigar_op)) × n_cigar_op for cigar_ops: ['I', 'S', 'X']
+    """ log(L(r|s)) = log(P(cigar_op)) × n_cigar_op for CIGAR_OPS
 
         alignment(pysam.AlignmentFile): pysam alignment to score
         cigar_stats(list(int)): list of cigar stats to compute
         log_p_cigar_op(list(float)): list of cigar_op probabilities corresponding to cigar_stats;
                                         computed from primary alignments
+        dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
         return: log_score (float): log(L(r|s))
                 query_name (str): query name in alignment
                 species_tid (int): species-level taxonomy id corresponding to ref_name
     """
 
-    #log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
     ref_name, query_name = alignment.reference_name, alignment.query_name
-    n = get_align_len(alignment)
-    cigar_stats_normalized = [(v*(dict_longest_align[query_name]/n)) for v in cigar_stats]
+    align_len = get_align_len(alignment)
+    cigar_stats_normalized = [(v*(dict_longest_align[query_name]/align_len)) for v in cigar_stats]
     log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats_normalized)))
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
@@ -125,6 +129,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
         sam_path(str): path to sam file
         log_p_cigar_op(list(float)): probability for each cigar operation defined in CIGAR_OPS,
                                         where p > 0
+        dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
         zero_locs(list(int)): list of indices (int) where probability == 0
         return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
     """
@@ -152,7 +157,8 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                     for i in sorted(p_cigar_op_zero_locs, reverse=True):
                         del cigar_stats[i]
                     log_score, query_name, species_tid = \
-                        compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_align)
+                        compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
+                                             dict_longest_align)
                     if (((query_name, species_tid) not in log_p_rgs or
                          log_p_rgs[(query_name, species_tid)] < log_score)):
                         log_p_rgs[(query_name, species_tid)] = log_score
@@ -443,6 +449,7 @@ def collapse_rank(path, rank):
     if rank not in tax_order:
         raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
     taxa_remaining = tax_order[tax_order.index(rank):]
+    # pylint: disable=unsubscriptable-object
     df_emu = df_emu[['abundance'] + taxa_remaining]
     df_emu = df_emu.groupby(taxa_remaining, dropna=False).sum()
     output_path = f"{os.path.splitext(path)[0]}-{rank}.tsv"
@@ -544,8 +551,10 @@ if __name__ == "__main__":
         # perform EM algorithm & generate output
         sam_file, working_fasta = generate_alignments(args.input_file, out_file, args.db,
                                                       args.min_read_len, args.max_read_len)
-        log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = get_cigar_op_log_probabilities(sam_file)
-        log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
+        log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = \
+            get_cigar_op_log_probabilities(sam_file)
+        log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, longest_align_dict,
+                                         locs_p_cigar_zero)
         f_full, f_set_thresh = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
