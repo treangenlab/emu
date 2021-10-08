@@ -208,6 +208,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         lli_thresh(float): log likelihood increase minimum to continue EM iterations
         input_threshold(float): minimum relative abundance in output
         return: {int:float}: dict[species_tax_id]:estimated likelihood species is present in sample
+                float: min abundance threshold
     """
     n_db = len(db_ids)
     n_reads = len(unflatten(log_p_rgs))
@@ -247,6 +248,8 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
                 freq_set_thresh, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
             return freq_full, freq_set_thresh
 
+        #output current estimation
+        #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
         counter += 1
 
 
