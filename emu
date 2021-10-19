@@ -21,8 +21,10 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # static global variables
-CIGAR_OPS = [1, 4, 8]
+CIGAR_OPS = [1, 2, 4, 8]
+CIGAR_OPS_ALL = [1, 2, 4, 7, 8]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
+
 
 def validate_input(path):
     """Validate input file is either: fasta, fastq, or sam alignement file.
@@ -49,8 +51,9 @@ def validate_input(path):
     if not (fasta_rd or fastq_rd):
         raise TypeError("Input must be in desired format: fasta or fastq")
 
+
 def get_align_stats(alignment):
-    """Retrieve list of inquired cigar stats for alignment ['I', 'S', 'X']
+    """Retrieve list of inquired cigar stats (defined by CIGAR_OPS) for alignment
 
         alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
         return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
@@ -58,56 +61,75 @@ def get_align_stats(alignment):
     return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
 
 
+def get_align_len(alignment):
+    """Retrieve number of columns in alignment
+
+        alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
+        return (int): number of columns in alignment
+    """
+    return sum([alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS_ALL])
+
 def get_cigar_op_log_probabilities(sam_path):
-    """P(match), P(mismatch), P(insertion), P(softclipping),
-        by counting how often the corresponding operations occur in the primary alignments
-        and by normalizing over the total sum of operations
+    """P(align_type) for each type in CIGAR_OPS by counting how often the corresponding
+            operations occur in the primary alignments and by normalizing over the total
+            sum of operations.
 
         sam_path(str): path to sam file of interest (requires =/X CIGAR operators)
         return: log probabilities (list(float)) for each cigar operation defined in CIGAR_OPS,
                     where p > 0
                 zero_locs (list(int)): list of indices (int) where probability == 0
+                dict_longest_align (dict[str]:(int)): dict of max alignment length
+                    for each query read
     """
     cigar_stats_primary = [0] * len(CIGAR_OPS)
+    dict_longest_align = {}
     # pylint: disable=maybe-no-member
     sam_pysam = pysam.AlignmentFile(sam_path)
     for alignment in sam_pysam.fetch():
+        dict_longest_align[alignment.query_name] = \
+            max(get_align_len(alignment), int(dict_longest_align.get(alignment.query_name) or 0))
         if not alignment.is_secondary and not alignment.is_supplementary \
                 and alignment.reference_name:
             cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
+
     zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
 
     if zero_locs:
         for i in sorted(zero_locs, reverse=True):
             del cigar_stats_primary[i]
     n_char = sum(cigar_stats_primary)
-    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs
+    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs, \
+           dict_longest_align
 
 
-def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op):
-    """ log(L(r|s)) = log(P(cigar_op)) × n_cigar_op for cigar_ops: ['I', 'S', 'X']
+def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_align, align_len):
+    """ log(L(r|s)) = log(P(cigar_op)) × n_cigar_op for CIGAR_OPS
 
         alignment(pysam.AlignmentFile): pysam alignment to score
         cigar_stats(list(int)): list of cigar stats to compute
         log_p_cigar_op(list(float)): list of cigar_op probabilities corresponding to cigar_stats;
                                         computed from primary alignments
+        dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
+        align_len (int): number of columns in the alignment
         return: log_score (float): log(L(r|s))
                 query_name (str): query name in alignment
                 species_tid (int): species-level taxonomy id corresponding to ref_name
     """
 
-    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats)))
     ref_name, query_name = alignment.reference_name, alignment.query_name
+    cigar_stats_normalized = [(v*(dict_longest_align[query_name]/align_len)) for v in cigar_stats]
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats_normalized)))
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
 
-def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
+def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
 
         sam_path(str): path to sam file
         log_p_cigar_op(list(float)): probability for each cigar operation defined in CIGAR_OPS,
                                         where p > 0
+        dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
         zero_locs(list(int)): list of indices (int) where probability == 0
         return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
     """
@@ -118,10 +140,12 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
 
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch():
-            if alignment.reference_name:
+            align_len = get_align_len(alignment)
+            if alignment.reference_name and align_len:
                 cigar_stats = get_align_stats(alignment)
                 log_score, query_name, species_tid = \
-                    compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op)
+                    compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
+                                         dict_longest_align, align_len)
                 if (((query_name, species_tid) not in log_p_rgs or
                      log_p_rgs[(query_name, species_tid)] < log_score)):
                     log_p_rgs[(query_name, species_tid)] = log_score
@@ -129,13 +153,15 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, p_cigar_op_zero_locs=None):
                 unassigned_set.add(alignment.query_name)
     else:
         for alignment in sam_filename.fetch():
-            if alignment.reference_name:
+            align_len = get_align_len(alignment)
+            if alignment.reference_name and align_len:
                 cigar_stats = get_align_stats(alignment)
                 if sum([cigar_stats[x] for x in p_cigar_op_zero_locs]) == 0:
                     for i in sorted(p_cigar_op_zero_locs, reverse=True):
                         del cigar_stats[i]
                     log_score, query_name, species_tid = \
-                        compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op)
+                        compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
+                                             dict_longest_align, align_len)
                     if (((query_name, species_tid) not in log_p_rgs or
                          log_p_rgs[(query_name, species_tid)] < log_score)):
                         log_p_rgs[(query_name, species_tid)] = log_score
@@ -182,6 +208,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         lli_thresh(float): log likelihood increase minimum to continue EM iterations
         input_threshold(float): minimum relative abundance in output
         return: {int:float}: dict[species_tax_id]:estimated likelihood species is present in sample
+                float: min abundance threshold
     """
     n_db = len(db_ids)
     n_reads = len(unflatten(log_p_rgs))
@@ -221,6 +248,8 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
                 freq_set_thresh, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
             return freq_full, freq_set_thresh
 
+        #output current estimation
+        #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
         counter += 1
 
 
@@ -426,6 +455,7 @@ def collapse_rank(path, rank):
     if rank not in tax_order:
         raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
     taxa_remaining = tax_order[tax_order.index(rank):]
+    # pylint: disable=unsubscriptable-object
     df_emu = df_emu[['abundance'] + taxa_remaining]
     df_emu = df_emu.groupby(taxa_remaining, dropna=False).sum()
     output_path = f"{os.path.splitext(path)[0]}-{rank}.tsv"
@@ -434,7 +464,7 @@ def collapse_rank(path, rank):
 
 
 if __name__ == "__main__":
-    __version__ = "1.0.3"
+    __version__ = "2.0.0"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -460,8 +490,8 @@ if __name__ == "__main__":
         help='path to emu database containing: names_df.tsv, '
              'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [$EMU_DATABASE_DIR]')
     abundance_parser.add_argument(
-        '--N', type=int, default=25,
-        help='minimap max number of secondary alignments per read [25]')
+        '--N', type=int, default=50,
+        help='minimap max number of secondary alignments per read [50]')
     abundance_parser.add_argument(
         '--output-dir', type=str, default="./results",
         help='output directory name [./results]')
@@ -527,8 +557,10 @@ if __name__ == "__main__":
         # perform EM algorithm & generate output
         sam_file, working_fasta = generate_alignments(args.input_file, out_file, args.db,
                                                       args.min_read_len, args.max_read_len)
-        log_prob_cigar_op, locs_p_cigar_zero = get_cigar_op_log_probabilities(sam_file)
-        log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, locs_p_cigar_zero)
+        log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = \
+            get_cigar_op_log_probabilities(sam_file)
+        log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, longest_align_dict,
+                                         locs_p_cigar_zero)
         f_full, f_set_thresh = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
