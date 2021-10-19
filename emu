@@ -464,7 +464,7 @@ def collapse_rank(path, rank):
 
 
 if __name__ == "__main__":
-    __version__ = "1.0.3"
+    __version__ = "2.0.0"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -490,8 +490,8 @@ if __name__ == "__main__":
         help='path to emu database containing: names_df.tsv, '
              'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [$EMU_DATABASE_DIR]')
     abundance_parser.add_argument(
-        '--N', type=int, default=25,
-        help='minimap max number of secondary alignments per read [25]')
+        '--N', type=int, default=50,
+        help='minimap max number of secondary alignments per read [50]')
     abundance_parser.add_argument(
         '--output-dir', type=str, default="./results",
         help='output directory name [./results]')
