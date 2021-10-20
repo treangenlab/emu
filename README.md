@@ -22,30 +22,37 @@ emu abundance --type sr example/short_read_f.fq
 
 ### Installation
 
-#### 1. Download database (or create your own as described below in 'Build Custom Database')
-Define `<path_to_database>` as your desired database directory
+##### 1. Download database
+
+Define `<path_to_database>` as your desired database directory. If you desire a different database, skip this step and follow steps below in **Build Custom Database**.
 
 ```bash
 export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v1.0.1/emu_database/
 ```
 
-#### 2. Activate appropriate conda environment
+##### 2. Activate appropriate conda environment
+
 Emu requires Python version to be in range 3.6.0-3.8.0. 
+
 ###### Option A: Create new Conda environment
+
 ```bash
 conda create --name py37 python=3.7 
 conda activate py37
 ```
 
 ###### Option B: Set Python version in current environment
+
 ```bash
 conda install python=3.7
 ```
 
-#### 3. Install Emu
+##### 3. Install Emu
+
 ###### Option A: Install Emu via conda
-Install conda, add the bioconda channel, and install Emu.
+
+Add the bioconda channel and install Emu.
 ```bash
 conda config --add channels defaults
 conda config --add channels bioconda
@@ -54,7 +61,9 @@ conda install emu
 ```
 
 ###### Option B: Create local Emu conda environment
+
 If you are unable to install Emu via conda as described above, an alternative approach is to install conda and create an environment that supports Emu. The default name of the environment created is `emu`, but this can be configured in the `environment.yml` file if desired. The environment will need to be activated before Emu can be run.
+
 ```bash
 conda env create -f environment.yml
 conda activate custom-emu
@@ -63,7 +72,6 @@ NOTE: with this installation method, all commands will need to be run with `<pat
 ```bash
 ./emu abundance example/full_length.fa
 ```
-
 
 
 ### Abundance Estimation Parameters
