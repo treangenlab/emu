@@ -98,7 +98,7 @@ An emu database consists of 4 files:
 | :-------  | :----- |
 |names_df.tsv| tab separated datasheet of database taxonomy names containing at least columns: 'tax_id' and 'name_txt'|
 |nodes_df.tsv| tab separated datasheet of database taxonomy tree containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'|
-|species_taxid.fasta| database sequences where each sequence header starts with the respective species-level tax id (or lowest level above species-level if missing) preceeding a colon [\<species_taxid>:\<remainder of header>]|
+|species_taxid.fasta| database sequences where each sequence header starts with the respective species-level tax id (or lowest level above species-level if missing) preceeding a colon [&lt;species_taxid>:&lt;remainder of header>]|
 |unique_taxids.tsv| single column tab separated values of unqiue tax_ids in database|
 
 To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
@@ -132,7 +132,7 @@ emu abundance ./example_customdb/ex.fasta
 
 ### Collapse Taxonomy
 
-The collapse-taxonomy function can be used on any emu output <.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:<input_file>-<rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+The collapse-taxonomy function can be used on any emu output <.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 
 ```bash
 emu collapse-taxonomy <file_path> <rank>
