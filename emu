@@ -21,8 +21,8 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # static global variables
-CIGAR_OPS = [1, 2, 4, 8]
-CIGAR_OPS_ALL = [1, 2, 4, 7, 8]
+CIGAR_OPS = [1, 2, 4, 10]
+CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 
@@ -53,12 +53,14 @@ def validate_input(path):
 
 
 def get_align_stats(alignment):
-    """Retrieve list of inquired cigar stats (defined by CIGAR_OPS) for alignment
+    """Retrieve list of inquired cigar stats (I,D,S,X) for alignment
 
         alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
-        return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
+        return (list(int)): list of counts for each cigar operation defined in (I,D,S,X)
     """
-    return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
+    cigar_stats = alignment.get_cigar_stats()[0]
+    n_mismatch = cigar_stats[10] - cigar_stats[1] - cigar_stats[2]
+    return [cigar_stats[1], cigar_stats[2], cigar_stats[4], n_mismatch]
 
 
 def get_align_len(alignment):
@@ -329,7 +331,7 @@ def generate_alignments(in_file_list, out_basename, database, min_len, max_len):
         input_file = fasta_drop_len
 
     subprocess.check_output(
-            f"minimap2 -x {args.type} -ac -t {args.threads} -N {args.N} -p .9 --eqx "
+            f"minimap2 -ax {args.type} -t {args.threads} -N {args.N} -p .9 "
             f"{db_sequence_file} {input_file} -o {sam_align_file}",
             shell=True)
     return sam_align_file, fasta_drop_len
