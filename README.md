@@ -79,8 +79,6 @@ NOTE: with this installation method, all commands will need to be run with `<pat
 | Command	| Default	| Description	|
 | :-------  | :----- | :-------- | 
 |--type	| map-ont	| denote sequencer [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]	|
-|--min-read-len| 0	| drops all sequences below this length; used in long-read only	|
-|--max-read-len| 5000| drops all sequences above this length; used in long-read only|
 |--min-abundance| 0.0001| generates results with species relative abundance above this value in addition to full results; .01 = 1%|
 |--db| $EMU_DATABASE_DIR| path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv|
 |--N| 25| max number of alignments utilized for each read|

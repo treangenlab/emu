@@ -521,7 +521,7 @@ if __name__ == "__main__":
 
     if args.subparser_name == "abundance":
         # check input file is fasta/q or sam alignment file
-        validate_input(args.input_file[0])
+        #validate_input(args.input_file[0])
 
         # convert taxonomy files to dataframes
         if not args.db:
