@@ -88,11 +88,15 @@ def get_cigar_op_log_probabilities(sam_path):
     # pylint: disable=maybe-no-member
     sam_pysam = pysam.AlignmentFile(sam_path)
     for alignment in sam_pysam.fetch():
-        dict_longest_align[alignment.query_name] = \
-            max(get_align_len(alignment), int(dict_longest_align.get(alignment.query_name) or 0))
+        align_len = get_align_len(alignment)
         if not alignment.is_secondary and not alignment.is_supplementary \
                 and alignment.reference_name:
             cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
+            dict_longest_align[alignment.query_name] = align_len
+        else:
+            if dict_longest_align[alignment.query_name] > align_len:
+                dict_longest_align[alignment.query_name] = align_len
+
 
     zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
 
@@ -119,8 +123,8 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     """
 
     ref_name, query_name = alignment.reference_name, alignment.query_name
-    cigar_stats_normalized = [(v*(dict_longest_align[query_name]/align_len)) for v in cigar_stats]
-    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats_normalized)))
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats))) * \
+                (dict_longest_align[query_name]/align_len)
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
