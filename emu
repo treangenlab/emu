@@ -306,13 +306,11 @@ def freq_to_lineage_df(freq, tsv_output_path, nodes_df, names_df):
     return results_df
 
 
-def generate_alignments(in_file_list, out_basename, database, min_len, max_len):
+def generate_alignments(in_file_list, out_basename, database):
     """ Generate .sam alignment file
 
         in_file_list(list(str)): list of path(s) to input sequences
         out_basename(str): path and basename for output files
-        min_len(int): minimum read length included in analysis
-        max_len(int): maximum read length included in analysis
     """
     input_file = " ".join(in_file_list)
     filetype = pathlib.PurePath(args.input_file[0]).suffix
@@ -321,20 +319,12 @@ def generate_alignments(in_file_list, out_basename, database, min_len, max_len):
         return input_file, None
     sam_align_file = f"{out_basename}_emu_alignments.sam"
     db_sequence_file = os.path.join(database, 'species_taxid.fasta')
-    fasta_drop_len = f"{out_basename}_emu_input.fa"
-    if args.type != 'sr':
-        subprocess.check_output(
-            f"bioawk -c fastx '(length($seq)<={max_len}"
-            f"&&length($seq)>={min_len}){{print \">\" $name ORS $seq}}' "
-            f"{input_file} > {fasta_drop_len}",
-            shell=True)
-        input_file = fasta_drop_len
 
     subprocess.check_output(
             f"minimap2 -ax {args.type} -t {args.threads} -N {args.N} -p .9 "
             f"{db_sequence_file} {input_file} -o {sam_align_file}",
             shell=True)
-    return sam_align_file, fasta_drop_len
+    return sam_align_file
 
 
 def create_nodes_df(nodes_path):
@@ -479,12 +469,6 @@ if __name__ == "__main__":
         '--type', '-x', choices=['map-ont', 'map-pb', 'sr'], default='map-ont',
         help='short-read: sr, Pac-Bio:map-pb, ONT:map-ont [map-ont]')
     abundance_parser.add_argument(
-        '--min-read-len', type=int, default=0,
-        help='minimum read length for long-read data [0]')
-    abundance_parser.add_argument(
-        '--max-read-len', type=int, default=5000,
-        help='maximum read length for long-read data [5000]')
-    abundance_parser.add_argument(
         '--min-abundance', '-a', type=float, default=0.0001,
         help='min species abundance in results [0.0001]')
     abundance_parser.add_argument(
@@ -557,8 +541,7 @@ if __name__ == "__main__":
             out_file = os.path.join(args.output_dir, args.output_basename)
 
         # perform EM algorithm & generate output
-        sam_file, working_fasta = generate_alignments(args.input_file, out_file, args.db,
-                                                      args.min_read_len, args.max_read_len)
+        sam_file = generate_alignments(args.input_file, out_file, args.db)
         log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = \
             get_cigar_op_log_probabilities(sam_file)
         log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, longest_align_dict,
@@ -577,8 +560,6 @@ if __name__ == "__main__":
         if not args.keep_files:
             if os.path.exists(sam_file):
                 os.remove(sam_file)
-            if os.path.exists(working_fasta):
-                os.remove(working_fasta)
 
     if args.subparser_name == "build-database":
         emu_db_path = os.getcwd()
