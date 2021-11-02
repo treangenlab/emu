@@ -96,10 +96,7 @@ def get_cigar_op_log_probabilities(sam_path):
         elif alignment.reference_name:
             if dict_longest_align[alignment.query_name] < align_len:
                 dict_longest_align[alignment.query_name] = align_len
-
-
     zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
-
     if zero_locs:
         for i in sorted(zero_locs, reverse=True):
             del cigar_stats_primary[i]
