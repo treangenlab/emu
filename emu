@@ -76,7 +76,7 @@ def get_cigar_op_log_probabilities(sam_path):
             operations occur in the primary alignments and by normalizing over the total
             sum of operations.
 
-        sam_path(str): path to sam file of interest (requires =/X CIGAR operators)
+        sam_path(str): path to sam file of interest
         return: log probabilities (list(float)) for each cigar operation defined in CIGAR_OPS,
                     where p > 0
                 zero_locs (list(int)): list of indices (int) where probability == 0
@@ -89,11 +89,11 @@ def get_cigar_op_log_probabilities(sam_path):
     sam_pysam = pysam.AlignmentFile(sam_path)
     for alignment in sam_pysam.fetch():
         align_len = get_align_len(alignment)
+        if align_len not in dict_longest_align.keys():
+            dict_longest_align[alignment.query_name] = align_len
         if not alignment.is_secondary and not alignment.is_supplementary \
                 and alignment.reference_name:
             cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
-            dict_longest_align[alignment.query_name] = align_len
-        elif alignment.reference_name:
             if dict_longest_align[alignment.query_name] < align_len:
                 dict_longest_align[alignment.query_name] = align_len
     zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
@@ -317,7 +317,7 @@ def generate_alignments(in_file_list, out_basename, database):
     filetype = pathlib.PurePath(args.input_file[0]).suffix
     if filetype == '.sam':
         args.keep_files = True
-        return input_file, None
+        return input_file
     sam_align_file = f"{out_basename}_emu_alignments.sam"
     db_sequence_file = os.path.join(database, 'species_taxid.fasta')
 
