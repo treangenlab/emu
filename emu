@@ -55,7 +55,7 @@ def validate_input(path):
 def get_align_stats(alignment):
     """Retrieve list of inquired cigar stats (I,D,S,X) for alignment
 
-        alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
+        alignment (pysam.AlignmentFile): align of interest
         return (list(int)): list of counts for each cigar operation defined in (I,D,S,X)
     """
     cigar_stats = alignment.get_cigar_stats()[0]
@@ -66,7 +66,7 @@ def get_align_stats(alignment):
 def get_align_len(alignment):
     """Retrieve number of columns in alignment
 
-        alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
+        alignment (pysam.AlignmentFile): align of interest
         return (int): number of columns in alignment
     """
     return sum([alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS_ALL])
