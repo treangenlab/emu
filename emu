@@ -457,7 +457,7 @@ def collapse_rank(path, rank):
 
 
 if __name__ == "__main__":
-    __version__ = "2.0.0"
+    __version__ = "2.0.1"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
