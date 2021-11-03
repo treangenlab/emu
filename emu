@@ -21,8 +21,8 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # static global variables
-CIGAR_OPS = [1, 2, 4, 8]
-CIGAR_OPS_ALL = [1, 2, 4, 7, 8]
+CIGAR_OPS = [1, 2, 4, 10]
+CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 
@@ -53,18 +53,20 @@ def validate_input(path):
 
 
 def get_align_stats(alignment):
-    """Retrieve list of inquired cigar stats (defined by CIGAR_OPS) for alignment
+    """Retrieve list of inquired cigar stats (I,D,S,X) for alignment
 
-        alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
-        return (list(int)): list of counts for each cigar operation defined in CIGAR_OPS
+        alignment (pysam.AlignmentFile): align of interest
+        return (list(int)): list of counts for each cigar operation defined in (I,D,S,X)
     """
-    return [alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS]
+    cigar_stats = alignment.get_cigar_stats()[0]
+    n_mismatch = cigar_stats[10] - cigar_stats[1] - cigar_stats[2]
+    return [cigar_stats[1], cigar_stats[2], cigar_stats[4], n_mismatch]
 
 
 def get_align_len(alignment):
     """Retrieve number of columns in alignment
 
-        alignment (pysam.AlignmentFile): align of interest (requires =/X CIGAR operators)
+        alignment (pysam.AlignmentFile): align of interest
         return (int): number of columns in alignment
     """
     return sum([alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS_ALL])
@@ -74,7 +76,7 @@ def get_cigar_op_log_probabilities(sam_path):
             operations occur in the primary alignments and by normalizing over the total
             sum of operations.
 
-        sam_path(str): path to sam file of interest (requires =/X CIGAR operators)
+        sam_path(str): path to sam file of interest
         return: log probabilities (list(float)) for each cigar operation defined in CIGAR_OPS,
                     where p > 0
                 zero_locs (list(int)): list of indices (int) where probability == 0
@@ -86,14 +88,15 @@ def get_cigar_op_log_probabilities(sam_path):
     # pylint: disable=maybe-no-member
     sam_pysam = pysam.AlignmentFile(sam_path)
     for alignment in sam_pysam.fetch():
-        dict_longest_align[alignment.query_name] = \
-            max(get_align_len(alignment), int(dict_longest_align.get(alignment.query_name) or 0))
+        align_len = get_align_len(alignment)
+        if align_len not in dict_longest_align.keys():
+            dict_longest_align[alignment.query_name] = align_len
         if not alignment.is_secondary and not alignment.is_supplementary \
                 and alignment.reference_name:
             cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
-
+            if dict_longest_align[alignment.query_name] < align_len:
+                dict_longest_align[alignment.query_name] = align_len
     zero_locs = [i for i, e in enumerate(cigar_stats_primary) if e == 0]
-
     if zero_locs:
         for i in sorted(zero_locs, reverse=True):
             del cigar_stats_primary[i]
@@ -117,8 +120,8 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     """
 
     ref_name, query_name = alignment.reference_name, alignment.query_name
-    cigar_stats_normalized = [(v*(dict_longest_align[query_name]/align_len)) for v in cigar_stats]
-    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats_normalized)))
+    log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats))) * \
+                (dict_longest_align[query_name]/align_len)
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
@@ -304,35 +307,25 @@ def freq_to_lineage_df(freq, tsv_output_path, nodes_df, names_df):
     return results_df
 
 
-def generate_alignments(in_file_list, out_basename, database, min_len, max_len):
+def generate_alignments(in_file_list, out_basename, database):
     """ Generate .sam alignment file
 
         in_file_list(list(str)): list of path(s) to input sequences
         out_basename(str): path and basename for output files
-        min_len(int): minimum read length included in analysis
-        max_len(int): maximum read length included in analysis
     """
     input_file = " ".join(in_file_list)
     filetype = pathlib.PurePath(args.input_file[0]).suffix
     if filetype == '.sam':
         args.keep_files = True
-        return input_file, None
+        return input_file
     sam_align_file = f"{out_basename}_emu_alignments.sam"
     db_sequence_file = os.path.join(database, 'species_taxid.fasta')
-    fasta_drop_len = f"{out_basename}_emu_input.fa"
-    if args.type != 'sr':
-        subprocess.check_output(
-            f"bioawk -c fastx '(length($seq)<={max_len}"
-            f"&&length($seq)>={min_len}){{print \">\" $name ORS $seq}}' "
-            f"{input_file} > {fasta_drop_len}",
-            shell=True)
-        input_file = fasta_drop_len
 
     subprocess.check_output(
-            f"minimap2 -x {args.type} -ac -t {args.threads} -N {args.N} -p .9 --eqx "
+            f"minimap2 -ax {args.type} -t {args.threads} -N {args.N} -p .9 "
             f"{db_sequence_file} {input_file} -o {sam_align_file}",
             shell=True)
-    return sam_align_file, fasta_drop_len
+    return sam_align_file
 
 
 def create_nodes_df(nodes_path):
@@ -477,12 +470,6 @@ if __name__ == "__main__":
         '--type', '-x', choices=['map-ont', 'map-pb', 'sr'], default='map-ont',
         help='short-read: sr, Pac-Bio:map-pb, ONT:map-ont [map-ont]')
     abundance_parser.add_argument(
-        '--min-read-len', type=int, default=0,
-        help='minimum read length for long-read data [0]')
-    abundance_parser.add_argument(
-        '--max-read-len', type=int, default=5000,
-        help='maximum read length for long-read data [5000]')
-    abundance_parser.add_argument(
         '--min-abundance', '-a', type=float, default=0.0001,
         help='min species abundance in results [0.0001]')
     abundance_parser.add_argument(
@@ -535,7 +522,7 @@ if __name__ == "__main__":
 
     if args.subparser_name == "abundance":
         # check input file is fasta/q or sam alignment file
-        validate_input(args.input_file[0])
+        #validate_input(args.input_file[0])
 
         # convert taxonomy files to dataframes
         if not args.db:
@@ -555,8 +542,7 @@ if __name__ == "__main__":
             out_file = os.path.join(args.output_dir, args.output_basename)
 
         # perform EM algorithm & generate output
-        sam_file, working_fasta = generate_alignments(args.input_file, out_file, args.db,
-                                                      args.min_read_len, args.max_read_len)
+        sam_file = generate_alignments(args.input_file, out_file, args.db)
         log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = \
             get_cigar_op_log_probabilities(sam_file)
         log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, longest_align_dict,
@@ -575,8 +561,6 @@ if __name__ == "__main__":
         if not args.keep_files:
             if os.path.exists(sam_file):
                 os.remove(sam_file)
-            if os.path.exists(working_fasta):
-                os.remove(working_fasta)
 
     if args.subparser_name == "build-database":
         emu_db_path = os.getcwd()
