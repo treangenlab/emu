@@ -3,19 +3,19 @@
 
 ### Description
 
-Emu is a relative abundance estimator for 16S genomic sequences. The method is optimized for full-length reads, but can also be utilized for short-read data.
+Emu is a relative abundance estimator for 16S genomic sequences. The method is optimized for error-prone full-length reads, but can also be utilized for short-read data.
 
 ### Synopsis
 
-Calculate relative abundances for Oxford Nanopore Technologies single-end 16s reads:
+Calculate relative abundances for Oxford Nanopore Technologies single-end 16S reads:
 ```bash
 emu abundance example/full_length.fa
 ```
-Calculate relative abundances for short paired-end 16s data:
+Calculate relative abundances for short paired-end 16S data:
 ```bash
 emu abundance --type sr example/short_read_f.fq example/short_read_r.fq
 ```
-Calculate relative abundances for short single-end 16s data:
+Calculate relative abundances for short single-end 16S data:
 ```bash
 emu abundance --type sr example/short_read_f.fq
 ```
@@ -127,10 +127,11 @@ export EMU_DATABASE_DIR=./zymo_assembled_db
 emu abundance ./example_customdb/ex.fasta
 ```
 
+Note: if your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where <genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
 
 ### Collapse Taxonomy
 
-The collapse-taxonomy function can be used on any emu output <.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 
 ```bash
 emu collapse-taxonomy <file_path> <rank>
