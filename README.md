@@ -33,7 +33,7 @@ wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz 
 
 ##### 2. Activate appropriate conda environment
 
-Emu requires Python version to be in range 3.6.0-3.8.0. 
+Emu requires Python version to be in range 3.6.0-3.8.12. 
 
 ###### Option A: Create new Conda environment
 
