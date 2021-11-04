@@ -5,7 +5,7 @@
 
 Emu is a relative abundance estimator for 16S genomic sequences. The method is optimized for error-prone full-length reads, but can also be utilized for short-read data.
 
-### Synopsis
+### Demo
 
 Calculate relative abundances for Oxford Nanopore Technologies single-end 16S reads:
 ```bash
@@ -20,6 +20,8 @@ Calculate relative abundances for short single-end 16S data:
 emu abundance --type sr example/short_read_f.fq
 ```
 
+Expected output: each of the above commands is expected to create a relative abundance .tsv file in a ./results folder. Output names are: full_length_rel-abundance.tsv, short_read_f-short_read_r_rel-abundance.tsv, short_read_f_rel-abundance.tsv.
+Expected run time: each of the above commands is expected to complete successfully in a couple seconds.
 ### Installation
 
 ##### 1. Download database
@@ -73,6 +75,7 @@ NOTE: with this installation method, all commands will need to be run with `<pat
 ./emu abundance example/full_length.fa
 ```
 
+Each step of the installation process is expected to take a matter of seconds.
 
 ### Abundance Estimation Parameters
 
@@ -136,6 +139,15 @@ The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to g
 ```bash
 emu collapse-taxonomy <file_path> <rank>
 ```
+
+### System Requirements
+
+All software depencies are listed in environment.yml. Emu v2.0.1 has been tested on Python v3.7 and used to generate results in manuscript.
+
+### Emu Manuscript
+
+Preprint: [Curry, Kristen, et al. "Emu: Species-Level Microbial Community Profiling for Full-Length Nanopore 16S Reads." bioRxiv (2021).](https://www.biorxiv.org/content/10.1101/2021.05.02.442339v1)
+Repository for reproduction of results in manuscript: [Emu-benchmark](https://gitlab.com/treangenlab/emu-benchmark)
 
 
 
