@@ -87,7 +87,7 @@ NOTE: with this installation method, all commands will need to be run with `<pat
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
 |--threads| 3| number of threads utilized by minimap2|
 
-Note: lowering the --N parameter will likely decrease the RAM consumption.
+Note: If you are experiencing heavy RAM consumption, first upgrade minimap2 to at least v2.22. If memory is still an issue, try decreasing the number of secondary alignments evaluated for each read (--N).
 
 ### Build Custom Database
 
@@ -127,7 +127,7 @@ export EMU_DATABASE_DIR=./zymo_assembled_db
 emu abundance ./example_customdb/ex.fasta
 ```
 
-Note: if your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where <genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
+Note: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where <genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
 
 ### Collapse Taxonomy
 
