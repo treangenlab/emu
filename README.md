@@ -21,6 +21,7 @@ emu abundance --type sr example/short_read_f.fq
 ```
 
 Expected output: each of the above commands is expected to create a relative abundance .tsv file in a ./results folder. Output names are: full_length_rel-abundance.tsv, short_read_f-short_read_r_rel-abundance.tsv, short_read_f_rel-abundance.tsv.
+
 Expected run time: each of the above commands is expected to complete successfully in a couple seconds.
 ### Installation
 
