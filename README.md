@@ -127,11 +127,11 @@ export EMU_DATABASE_DIR=./zymo_assembled_db
 emu abundance ./example_customdb/ex.fasta
 ```
 
-Note: if your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified <genus>” where <genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (<taxa>) is detected. Then, "unclassified <taxa>" will be reported as the species classification instead. 
+Note: if your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where <genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
 
 ### Collapse Taxonomy
 
-The collapse-taxonomy function can be used on any emu output <.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 
 ```bash
 emu collapse-taxonomy <file_path> <rank>
