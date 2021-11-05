@@ -131,7 +131,7 @@ export EMU_DATABASE_DIR=./zymo_assembled_db
 emu abundance ./example_customdb/ex.fasta
 ```
 
-Note: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where &lt;&&lt;genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
+Note: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where &lt;genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
 
 ### Collapse Taxonomy
 
