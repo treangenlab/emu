@@ -357,7 +357,8 @@ def build_taxonomy(unique_tids, nodes_df, names_df, threads):
     """
     pandarallel.initialize(nb_workers=threads)
     results_df = pd.DataFrame(list(unique_tids), columns=["tax_id"])
-    lineages = results_df["tax_id"].parallel_apply(lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
+    lineages = results_df["tax_id"].parallel_apply\
+        (lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
     header_order = ["tax_id", "species", "genus", "family", "order", "class",
                     "phylum", "clade", "superkingdom", "subspecies",
@@ -470,7 +471,7 @@ def collapse_rank(path, rank):
 
 
 if __name__ == "__main__":
-    __version__ = "2.0.1"
+    __version__ = "3.0.0"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
