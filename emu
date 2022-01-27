@@ -19,6 +19,7 @@ import pandas as pd
 from flatten_dict import unflatten
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
+from pandarallel import pandarallel
 
 # static global variables
 CIGAR_OPS = [1, 2, 4, 10]
@@ -343,7 +344,7 @@ def create_names_df(names_path):
     names_df = names_df.drop(columns=['unique_name', 'name_class'])
     return names_df
 
-def build_taxonomy(unique_tids, nodes_df, names_df):
+def build_taxonomy(unique_tids, nodes_df, names_df, threads):
     """Converts freq to a pandas df where each row contains abundance and tax lineage for
                 classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
 
@@ -351,11 +352,12 @@ def build_taxonomy(unique_tids, nodes_df, names_df):
         nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'];
                             tax_id as index
         names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt']; tax_id as index
+        threads(int): number of threads to use in parallelization
         returns(df): pandas df with lineage for all taxids in unique_tids
     """
-
+    pandarallel.initialize(nb_workers=threads)
     results_df = pd.DataFrame(list(unique_tids), columns=["tax_id"])
-    lineages = results_df["tax_id"].apply(lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
+    lineages = results_df["tax_id"].parallel_apply(lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
     header_order = ["tax_id", "species", "genus", "family", "order", "class",
                     "phylum", "clade", "superkingdom", "subspecies",
@@ -519,6 +521,9 @@ if __name__ == "__main__":
     build_db_parser.add_argument(
         '--seq2tax', type=str,
         help='path to tsv mapping species tax id to fasta sequence headers')
+    build_db_parser.add_argument(
+        '--threads', type=int, default=3,
+        help='threads [3]')
 
     collapse_parser = subparsers.add_parser("collapse-taxonomy",
                                             help="Collapse emu output at specified taxonomic rank")
@@ -586,7 +591,7 @@ if __name__ == "__main__":
         dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
         db_unique_ids = set(seq2tax.values())
         fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
-        df_taxonomy = build_taxonomy(db_unique_ids, df_nodes, df_names)
+        df_taxonomy = build_taxonomy(db_unique_ids, df_nodes, df_names, args.threads)
 
         df_taxonomy.to_csv(os.path.join(custom_db_path, 'taxonomy.tsv'), index=False, sep='\t')
         pd.DataFrame(db_unique_ids, columns=['tax_id']). \
