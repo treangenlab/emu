@@ -31,7 +31,7 @@ Define `<path_to_database>` as your desired database directory. If you desire a 
 
 ```bash
 export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v1.0.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v1.0.1/emu_database/
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
 ```
 
 ##### 2. Activate appropriate conda environment
