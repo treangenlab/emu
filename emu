@@ -257,7 +257,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         counter += 1
 
 
-def lineage_dict_from_tid(taxid, nodes_df, names_df):
+def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """Retrieve dict of lineage for given taxid
 
         tid(int): tax id to retrieve lineage dict
@@ -271,11 +271,11 @@ def lineage_dict_from_tid(taxid, nodes_df, names_df):
     rank = None
     prev_rank = None
     while prev_rank != "superkingdom":
-        row = nodes_df.loc[taxid]
+        tup = nodes_dict[taxid]
         prev_rank = rank
-        rank = row["rank"]
-        lineage_dict[rank] = names_df.loc[taxid]["name_txt"]
-        taxid = row["parent_tax_id"]
+        rank = tup[1]
+        lineage_dict[rank] = names_dict[taxid]
+        taxid = tup[0]
     return lineage_dict
 
 
@@ -316,7 +316,7 @@ def generate_alignments(in_file_list, out_basename, database):
     return sam_align_file
 
 
-def create_nodes_df(nodes_path):
+def create_nodes_dict(nodes_path):
     """convert nodes.dmp file into pandas dataframe
 
         nodes_path(str): path to nodes.dmp file
@@ -325,11 +325,10 @@ def create_nodes_df(nodes_path):
     node_headers = ['tax_id', 'parent_tax_id', 'rank']
     nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
     nodes_df.columns = node_headers
-    nodes_df = nodes_df.set_index("tax_id")
-    return nodes_df
+    return dict(zip(nodes_df['tax_id'], tuple(zip(nodes_df['parent_tax_id'], nodes_df['rank']))))
 
 
-def create_names_df(names_path):
+def create_names_dict(names_path):
     """convert names.dmp file into pandas dataframe
 
         names_path(str): path to names.dmp file
@@ -340,25 +339,26 @@ def create_names_df(names_path):
     names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str)\
         .drop([1, 3, 5, 7], axis=1)
     names_df.columns = name_headers
-    names_df = names_df[names_df["name_class"] == "scientific name"].set_index("tax_id")
+    names_df = names_df[names_df["name_class"] == "scientific name"]
     names_df = names_df.drop(columns=['unique_name', 'name_class'])
-    return names_df
+    return dict(zip(names_df['tax_id'], names_df['name_txt']))
 
-def build_taxonomy(unique_tids, nodes_df, names_df, threads):
+def build_taxonomy(unique_tids, nodes_dict, names_dict, threads):
     """Converts freq to a pandas df where each row contains abundance and tax lineage for
                 classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
 
         unique_tids(list): list of ints of each unique taxid in list of database sequences
-        nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'];
-                            tax_id as index
-        names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt']; tax_id as index
+        nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
+                                        tuple ('parent_taxid', 'rank') as values
+        names_dict{int:str}: pandas dict of names.dmp with 'tax_id' as keys,
+                                        'name_txt' as values
         threads(int): number of threads to use in parallelization
         returns(df): pandas df with lineage for all taxids in unique_tids
     """
     pandarallel.initialize(nb_workers=threads)
     results_df = pd.DataFrame(list(unique_tids), columns=["tax_id"])
     lineages = results_df["tax_id"].parallel_apply\
-        (lambda x: lineage_dict_from_tid(x, nodes_df, names_df))
+        (lambda x: lineage_dict_from_tid(x, nodes_dict, names_dict))
     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
     header_order = ["tax_id", "species", "genus", "family", "order", "class",
                     "phylum", "clade", "superkingdom", "subspecies",
@@ -371,27 +371,27 @@ def build_taxonomy(unique_tids, nodes_df, names_df, threads):
     return results_df
 
 
-def get_species_tid(tid, nodes_df):
+def get_species_tid(tid, nodes_dict):
     """ Get lowest taxid down to species-level in lineage for taxid [tid]
 
         tid(int): taxid for species level or more specific
-        nodes_df(pandas df): pandas df containing columns ['tax_id', 'parent_tax_id', 'rank']
+        nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
+                                        tuple ('parent_taxid', 'rank') as values
         return(int): species taxid in lineage
     """
-    if str(tid) not in nodes_df.index:
+    if str(tid) not in nodes_dict.keys():
         raise ValueError(f"Taxid:{tid} not found in nodes file")
-    row = nodes_df.loc[str(tid)]
-    while row['rank'] not in TAXONOMY_RANKS:
-        parent_tid = row['parent_tax_id']
-        row = nodes_df.loc[str(parent_tid)]
-    return row.name
+    while nodes_dict[str(tid)][1] not in TAXONOMY_RANKS:
+        tid = nodes_dict[str(tid)][0]
+    return tid
 
 
-def create_seq2tax_dict(seq2tax_path, nodes_df):
+def create_seq2tax_dict(seq2tax_path, nodes_dict):
     """Convert seqid-taxid mapping in seq2tax_path to dict mapping seqid to species level taxid
 
         seq2tax_path(str): path to seqid-taxid mapping file
-        nodes_df(df): pandas df containing columns ['tax_id', 'parent_tax_id', 'rank']
+        nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
+                                        tuple ('parent_taxid', 'rank') as values
         returns {str:int}: dict[seqid] = species taxid
     """
     seq2tax_dict, species_id_dict = {}, {}
@@ -401,7 +401,7 @@ def create_seq2tax_dict(seq2tax_path, nodes_df):
             if tid in species_id_dict.keys():
                 species_tid = species_id_dict[tid]
             else:
-                species_tid = get_species_tid(tid, nodes_df)
+                species_tid = get_species_tid(tid, nodes_dict)
                 species_id_dict[tid] = species_tid
             seq2tax_dict[seqid] = species_tid
     return seq2tax_dict
@@ -586,18 +586,19 @@ if __name__ == "__main__":
             os.makedirs(custom_db_path)
         stdout.write(f"Emu custom database generating at path: {custom_db_path} ...\n")
 
-        df_names = create_names_df(args.names)
-        df_nodes = create_nodes_df(args.nodes)
-        seq2tax = create_seq2tax_dict(args.seq2tax, df_nodes)
-        dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
+        dict_names = create_names_dict(args.names)
+        dict_nodes = create_nodes_dict(args.nodes)
+        seq2tax = create_seq2tax_dict(args.seq2tax, dict_nodes)
         db_unique_ids = set(seq2tax.values())
-        fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
-        df_taxonomy = build_taxonomy(db_unique_ids, df_nodes, df_names, args.threads)
-
-        df_taxonomy.to_csv(os.path.join(custom_db_path, 'taxonomy.tsv'), index=False, sep='\t')
         pd.DataFrame(db_unique_ids, columns=['tax_id']). \
             to_csv(os.path.join(custom_db_path, 'unique_taxids.tsv'), index=False, sep='\t')
+
+        dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
+        fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
         SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
+
+        df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, args.threads)
+        df_taxonomy.to_csv(os.path.join(custom_db_path, 'taxonomy.tsv'), index=False, sep='\t')
         stdout.write("Database creation successful\n")
 
     if args.subparser_name == "collapse-taxonomy":
