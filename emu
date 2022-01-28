@@ -270,7 +270,7 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     lineage_dict = {}
     rank = None
     prev_rank = None
-    while prev_rank != "superkingdom":
+    while prev_rank != "no rank":
         tup = nodes_dict[taxid]
         prev_rank = rank
         rank = tup[1]
@@ -547,7 +547,7 @@ if __name__ == "__main__":
                              "Either 'export EMU_DATABASE_DIR=<path_to_database>' or "
                              "utilize '--db' parameter.")
         df_taxonomy = pd.read_csv(os.path.join(args.db, "taxonomy.tsv"), sep='\t',
-                                  index_col='tax_id')
+                                  index_col='tax_id', dtype=str)
         db_species_tids = pd.read_csv(os.path.join(args.db, "unique_taxids.tsv"),
                                       sep='\t')['tax_id']
 
