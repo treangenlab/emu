@@ -544,7 +544,7 @@ if __name__ == "__main__":
                              "utilize '--db' parameter.")
         df_taxonomy = pd.read_csv(os.path.join(args.db, "taxonomy.tsv"), sep='\t',
                                   index_col='tax_id', dtype=str)
-        db_species_tids = df_taxonomy['tax_id']
+        db_species_tids = df_taxonomy.index
 
         # set up output paths
         if not os.path.exists(args.output_dir):
