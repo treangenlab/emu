@@ -268,13 +268,9 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """
 
     lineage_dict = {}
-    rank = None
-    prev_rank = None
-    while prev_rank != "no rank":
+    while names_dict[taxid] != "root":
         tup = nodes_dict[taxid]
-        prev_rank = rank
-        rank = tup[1]
-        lineage_dict[rank] = names_dict[taxid]
+        lineage_dict[tup[1]] = names_dict[taxid]
         taxid = tup[0]
     return lineage_dict
 
@@ -548,8 +544,7 @@ if __name__ == "__main__":
                              "utilize '--db' parameter.")
         df_taxonomy = pd.read_csv(os.path.join(args.db, "taxonomy.tsv"), sep='\t',
                                   index_col='tax_id', dtype=str)
-        db_species_tids = pd.read_csv(os.path.join(args.db, "unique_taxids.tsv"),
-                                      sep='\t')['tax_id']
+        db_species_tids = df_taxonomy['tax_id']
 
         # set up output paths
         if not os.path.exists(args.output_dir):
@@ -590,8 +585,6 @@ if __name__ == "__main__":
         dict_nodes = create_nodes_dict(args.nodes)
         seq2tax = create_seq2tax_dict(args.seq2tax, dict_nodes)
         db_unique_ids = set(seq2tax.values())
-        pd.DataFrame(db_unique_ids, columns=['tax_id']). \
-            to_csv(os.path.join(custom_db_path, 'unique_taxids.tsv'), index=False, sep='\t')
 
         dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
         fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
