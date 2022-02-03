@@ -31,7 +31,7 @@ Define `<path_to_database>` as your desired database directory. If you desire a 
 
 ```bash
 export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v1.0.1/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
 ```
 
 ##### 2. Activate appropriate conda environment
@@ -95,13 +95,11 @@ Note: If you are experiencing heavy RAM consumption, first upgrade minimap2 to a
 
 ### Build Custom Database
 
-An emu database consists of 4 files:
+An emu database consists of 2 files:
 | Filename	| Description	|
 | :-------  | :----- |
-|names_df.tsv| tab separated datasheet of database taxonomy names containing at least columns: 'tax_id' and 'name_txt'|
-|nodes_df.tsv| tab separated datasheet of database taxonomy tree containing at least columns: 'tax_id', 'parent_tax_id', and 'rank'|
+|taxonomy.tsv| tab separated datasheet of database taxonomy lineages containing at columns: 'tax_id' and any taxonomic ranks (i.e. species, genus, etc) |
 |species_taxid.fasta| database sequences where each sequence header starts with the respective species-level tax id (or lowest level above species-level if missing) preceeding a colon [&lt;species_taxid>:&lt;remainder of header>]|
-|unique_taxids.tsv| single column tab separated values of unqiue tax_ids in database|
 
 To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
 
@@ -121,7 +119,7 @@ emu build-database zymo_assembled_db --names ./example_customdb/ex_names.dmp --n
 ```
 
 ```bash
-emu abundance ./example_customdb/ex.fasta --db ./zymo_assembled_db
+emu abundance ./example_customdb/ex.fasta --db ./zymo_assembled_db --threads 3
 ```
 
 If preferred, user can define custom database through the shell variable rather than specifying with each run at the command line.
@@ -143,7 +141,7 @@ emu collapse-taxonomy <file_path> <rank>
 
 ### System Requirements
 
-All software depencies are listed in environment.yml. Emu v2.0.1 has been tested on Python v3.7 and used to generate results in manuscript.
+All software depencies are listed in environment.yml. Emu v3.0.0 has been tested on Python v3.7 and used to generate results in manuscript.
 
 ### Emu Manuscript
 
