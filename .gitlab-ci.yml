@@ -1,11 +1,11 @@
 image: continuumio/anaconda3:latest
 
 before_script:
-  - if conda env list | grep -q 'custom-emu-v3'; then
-  - echo "emu environment already found. Skipping creation..."
-  - else
-  - conda env create -f environment.yml
+  - conda update -n base conda
+  - if conda env list | grep -q 'custom-emu'; then
+  - conda env remove --name custom-emu
   - fi;
+  - conda env create -f environment.yml
   - source activate custom-emu
   - export EMU_DATABASE_DIR=./emu_database
 
