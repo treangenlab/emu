@@ -1,7 +1,7 @@
 image: continuumio/anaconda3:latest
 
 before_script:
-  - conda update -n base conda
+  #- conda update -n base conda
   - if conda env list | grep -q 'custom-emu'; then
   - conda env remove --name custom-emu
   - fi;
