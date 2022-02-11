@@ -1,4 +1,4 @@
-name: custom-emu-v3
+name: custom-emu
 
 channels:
   - bioconda
