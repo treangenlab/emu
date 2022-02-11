@@ -1,9 +1,9 @@
 image: continuumio/anaconda3:latest
 
 before_script:
-  - if conda env list | grep -q 'custom-emu'; then
-  - echo "emu environment already found. Skipping creation..."
-  - else
+  #- if conda env list | grep -q 'custom-emu'; then
+  #- echo "emu environment already found. Skipping creation..."
+  #- else
   - conda env create -f environment.yml
   - fi;
   - source activate custom-emu
