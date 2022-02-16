@@ -34,6 +34,8 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
 ```
 
+** Note Emu v3.0+ database requirement differ from previous versions. Check you are using the appropriate database for the version you are running.
+
 ##### 2. Activate appropriate conda environment
 
 Emu requires Python version to be in range 3.6.0-3.8.12. 
@@ -130,6 +132,15 @@ emu abundance ./example_customdb/ex.fasta
 ```
 
 Note: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where &lt;genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
+
+#### Alternative Database
+
+RDP v11.5 (https://rdp.cme.msu.edu/) has been pre-built for Emu v3.0+ and can be downloaded accordingly:
+
+```bash
+export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/rdp_database/
+```
 
 ### Collapse Taxonomy
 
