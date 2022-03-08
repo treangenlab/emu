@@ -136,6 +136,8 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
         dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
         zero_locs(list(int)): list of indices (int) where probability == 0
         return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
+                int: unassigned read count
+                int: assigned read count
     """
     # calculate log(L(read|seq)) for all alignments
     log_p_rgs, unassigned_set = {}, set()
@@ -174,8 +176,9 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
 
     assigned_reads = set(unflatten(log_p_rgs).keys())
     unassigned_reads = unassigned_set - assigned_reads
-    stdout.write(f"Unassigned read count: {len(unassigned_reads)}\n")
-    return log_p_rgs
+    unassigned_count = len(unassigned_reads)
+    stdout.write(f"Unassigned read count: {unassigned_count}\n")
+    return log_p_rgs, unassigned_count, len(assigned_reads)
 
 
 def expectation_maximization(log_p_rgs, freq):
@@ -277,20 +280,28 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     return lineage_dict
 
 
-def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df):
+def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, assigned_count,
+                       unassigned_count, counts=False):
     """Converts freq to a pandas df where each row contains abundance and tax lineage for
                 classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
 
         freq{int:float}: dict[species_tax_id]:estimated likelihood species is present in sample
         taxonomy_df(df): pandas df of all db sequence taxonomy with index 'tax_id'
         returns(df): pandas df with lineage and abundances for values in f
+        assigned_count(int): number of assigned reads
+        unassigned_count(int): number of unassigned reads
+        counts(boolean): True if include estimated counts in output .tsv file
     """
 
     results_df = pd.DataFrame(list(zip(freq.keys(), freq.values())),
                               columns=["tax_id", "abundance"]).set_index('tax_id')
 
     results_df = results_df.join(taxonomy_df, how='left')
-    results_df.to_csv(f"{tsv_output_path}.tsv", sep='\t')
+    if counts:
+        results_df["estimated counts"] = results_df["abundance"] * assigned_count
+        unassigned_df = {"estimated counts" : unassigned_count, "species": "unassigned_reads"}
+        results_df = results_df.append(unassigned_df, ignore_index=True)
+    results_df.to_csv(f"{tsv_output_path}.tsv", sep='\t', index=False)
     return results_df
 
 def generate_alignments(in_file_list, out_basename, database):
@@ -501,6 +512,9 @@ if __name__ == "__main__":
         '--keep-files', action="store_true",
         help='keep working files in output-dir')
     abundance_parser.add_argument(
+        '--keep-counts', action="store_true",
+        help='include estimated read counts in output')
+    abundance_parser.add_argument(
         '--threads', type=int, default=3,
         help='threads utilized by minimap [3]')
 
@@ -559,17 +573,18 @@ if __name__ == "__main__":
         sam_file = generate_alignments(args.input_file, out_file, args.db)
         log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = \
             get_cigar_op_log_probabilities(sam_file)
-        log_prob_rgs = log_prob_rgs_dict(sam_file, log_prob_cigar_op, longest_align_dict,
-                                         locs_p_cigar_zero)
+        log_prob_rgs, counts_unassigned, counts_assigned = log_prob_rgs_dict(
+            sam_file, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
         f_full, f_set_thresh = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
-        freq_to_lineage_df(f_full, f"{out_file}_rel-abundance", df_taxonomy)
+        freq_to_lineage_df(f_full, f"{out_file}_rel-abundance", df_taxonomy,
+                           counts_assigned, counts_unassigned, args.keep_counts)
         if f_set_thresh:
             freq_to_lineage_df(
                 f_set_thresh,
                 f"{out_file}_rel-abundance-threshold-{args.min_abundance}",
-                df_taxonomy)
+                df_taxonomy, counts_assigned, counts_unassigned, args.keep_counts)
 
         # clean up extra file
         if not args.keep_files:
