@@ -91,9 +91,12 @@ Each step of the installation process is expected to take a matter of seconds.
 |--output-dir| ./results| directory for output results|
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
+|--keep-counts| FALSE| include estimated read counts for each species in output|
 |--threads| 3| number of threads utilized by minimap2|
 
+
 Note: If you are experiencing heavy RAM consumption, first upgrade minimap2 to at least v2.22. If memory is still an issue, try decreasing the number of secondary alignments evaluated for each read (--N).
+Note: Estimated read counts are based on likelihood probabilities and therefore may not be integer values.
 
 ### Build Custom Database
 
