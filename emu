@@ -172,7 +172,9 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
             else:
                 unassigned_set.add(alignment.query_name)
 
-    stdout.write(f"Unassigned read count: {len(unassigned_set)}\n")
+    assigned_reads = set(unflatten(log_p_rgs).keys())
+    unassigned_reads = unassigned_set - assigned_reads
+    stdout.write(f"Unassigned read count: {len(unassigned_reads)}\n")
     return log_p_rgs
 
 
