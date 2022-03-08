@@ -472,10 +472,13 @@ def collapse_rank(path, rank):
         raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
     taxa_remaining = tax_order[tax_order.index(rank):]
     # pylint: disable=unsubscriptable-object
-    df_emu = df_emu[['abundance'] + taxa_remaining]
-    df_emu = df_emu.groupby(taxa_remaining, dropna=False).sum()
+    if 'estimated counts' in df_emu.columns:
+        df_emu_copy = df_emu[['abundance', 'estimated counts'] + taxa_remaining]
+    else:
+        df_emu_copy = df_emu[['abundance'] + taxa_remaining]
+    df_emu_copy = df_emu_copy.groupby(taxa_remaining, dropna=False).sum()
     output_path = f"{os.path.splitext(path)[0]}-{rank}.tsv"
-    df_emu.to_csv(output_path, sep='\t')
+    df_emu_copy.to_csv(output_path, sep='\t')
     stdout.write(f"File generated: {output_path}\n")
 
 
