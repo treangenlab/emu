@@ -87,7 +87,8 @@ Each step of the installation process is expected to take a matter of seconds.
 |--type	| map-ont	| denote sequencer [short-read:sr, Pac-Bio:map-pb, ONT:map-ont]	|
 |--min-abundance| 0.0001| generates results with species relative abundance above this value in addition to full results; .01 = 1%|
 |--db| $EMU_DATABASE_DIR| path to emu database; directory must include the following files: names_df.tsv, nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv|
-|--N| 50| max number of alignments utilized for each read|
+|--N| 50| max number of alignments utilized for each read in minimap2|
+|--K| 500M| minibatch size for mapping in minimap2|
 |--output-dir| ./results| directory for output results|
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|

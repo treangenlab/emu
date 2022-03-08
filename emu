@@ -320,7 +320,7 @@ def generate_alignments(in_file_list, out_basename, database):
 
     subprocess.check_output(
             f"minimap2 -ax {args.type} -t {args.threads} -N {args.N} -p .9 "
-            f"{db_sequence_file} {input_file} -o {sam_align_file}",
+            f"-K {args.K} {db_sequence_file} {input_file} -o {sam_align_file}",
             shell=True)
     return sam_align_file
 
@@ -503,8 +503,11 @@ if __name__ == "__main__":
         help='path to emu database containing: names_df.tsv, '
              'nodes_df.tsv, species_taxid.fasta, unqiue_taxids.tsv [$EMU_DATABASE_DIR]')
     abundance_parser.add_argument(
-        '--N', type=int, default=50,
+        '--N', '-N', type=int, default=50,
         help='minimap max number of secondary alignments per read [50]')
+    abundance_parser.add_argument(
+        '--K', '-K', type=int, default=500000000,
+        help='minibatch size for minimap2 mapping [500M]')
     abundance_parser.add_argument(
         '--output-dir', type=str, default="./results",
         help='output directory name [./results]')
