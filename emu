@@ -93,7 +93,7 @@ def output_unclassified(sam_path, seq_output_path, input_type):
                 )
                 output_records.append(record)
         SeqIO.write(output_records, f"{seq_output_path}.fa", "fasta")
-    if input_type == "fastq":
+    elif input_type == "fastq":
         for alignment in sam_pysam.fetch():
             if alignment.reference_name is None:
                 record = SeqRecord(
