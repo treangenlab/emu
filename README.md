@@ -93,6 +93,7 @@ Each step of the installation process is expected to take a matter of seconds.
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
 |--keep-counts| FALSE| include estimated read counts for each species in output|
+|--output-unclassified| FALSE| generate a separate output file of unclassified sequences|
 |--threads| 3| number of threads utilized by minimap2|
 
 
