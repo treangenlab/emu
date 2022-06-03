@@ -34,7 +34,7 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
 ```
 
-** Note Emu v3.0+ database requirement differ from previous versions. Check you are using the appropriate database for the version you are running.
+** Note Emu v3.0+ database requirements differ from previous versions. Check you are using the appropriate database for the version you are running.
 
 ##### 2. Activate appropriate conda environment
 
