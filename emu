@@ -159,7 +159,6 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
-
 def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
 
@@ -211,6 +210,10 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     unassigned_reads = unassigned_set - assigned_reads
     unassigned_count = len(unassigned_reads)
     stdout.write(f"Unassigned read count: {unassigned_count}\n")
+
+    ## remove if p(r|s) < 0.01
+    #min_p_thresh = math.log(0.01)
+    #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
     return log_p_rgs, unassigned_count, len(assigned_reads)
 
 
@@ -239,7 +242,8 @@ def expectation_maximization(log_p_rgs, freq):
     log_p_r = {read: math.log(v) - log_c[read] for read, v in p_r_c.items()}
     n_reads = len(log_p_r)
     return {seq: (sum(r_map.values()) / n_reads)
-            for seq, r_map in p_sgr.items()}, sum(log_p_r.values())
+            for seq, r_map in p_sgr.items()}, \
+           sum(log_p_r.values()), p_sgr
 
 
 def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold):
@@ -266,7 +270,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
 
     total_log_likelihood = -math.inf
     while True:
-        freq, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
+        freq, updated_log_likelihood, _ = expectation_maximization(log_p_rgs, freq)
 
         # check f vector sums to 1
         freq_sum = sum(freq.values())
@@ -283,12 +287,13 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         if log_likelihood_diff < lli_thresh:
             stdout.write(f"Number of EM iterations: {counter}\n")
             freq = {k: v for k, v in freq.items() if v >= freq_thresh}
-            freq_full, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
+            freq_full, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq)
             freq_set_thresh = None
             if freq_thresh < input_threshold:
                 freq = {k: v for k, v in freq_full.items() if v >= input_threshold}
-                freq_set_thresh, updated_log_likelihood = expectation_maximization(log_p_rgs, freq)
-            return freq_full, freq_set_thresh
+                freq_set_thresh, updated_log_likelihood, p_sgr = \
+                    expectation_maximization(log_p_rgs, freq)
+            return freq_full, freq_set_thresh, p_sgr
 
         #output current estimation
         #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
@@ -319,20 +324,21 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, assigned_count,
                 classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
 
         freq{int:float}: dict[species_tax_id]:estimated likelihood species is present in sample
+        tsv_output_path(str): path to output .tsv file
         taxonomy_df(df): pandas df of all db sequence taxonomy with index 'tax_id'
-        returns(df): pandas df with lineage and abundances for values in f
         assigned_count(int): number of assigned reads
         unassigned_count(int): number of unassigned reads
         counts(boolean): True if include estimated counts in output .tsv file
+        returns(df): pandas df with lineage and abundances for values in f
     """
 
     results_df = pd.DataFrame(list(zip(freq.keys(), freq.values())),
                               columns=["tax_id", "abundance"]).set_index('tax_id')
 
-    results_df = results_df.join(taxonomy_df, how='left')
+    results_df = results_df.join(taxonomy_df, how='left').reset_index()
     if counts:
         results_df["estimated counts"] = results_df["abundance"] * assigned_count
-        unassigned_df = {"estimated counts" : unassigned_count, "species": "unassigned_reads"}
+        unassigned_df = {"estimated counts": unassigned_count, "tax_id": "unassigned_reads"}
         results_df = results_df.append(unassigned_df, ignore_index=True)
     results_df.to_csv(f"{tsv_output_path}.tsv", sep='\t', index=False)
     return results_df
@@ -357,6 +363,17 @@ def generate_alignments(in_file_list, out_basename, database):
             shell=True)
     return sam_align_file
 
+def output_read_assignments(p_sgr, tsv_output_path):
+    """ Output file of read assignment distributions for all
+
+        p_sgr({tid:{read_id:probability}}): P(s|r), likelihood read r emanates db seq s
+        tsv_output_path(str): path to output .tsv file
+        returns(df): pandas df of read assignment distributions
+    """
+
+    dist_df = pd.DataFrame(p_sgr)
+    dist_df.to_csv(f"{tsv_output_path}.tsv", sep='\t')
+    return dist_df
 
 def create_nodes_dict(nodes_path):
     """convert nodes.dmp file into pandas dataframe
@@ -499,13 +516,13 @@ def collapse_rank(path, rank):
         rank(str): taxonomic rank for collapsed abundance: ["species", "genus", "family",
             "order", "class", "phylum", "clade", "superkingdom"]
     """
-    df_emu = pd.read_csv(path,sep='\t')
+    df_emu = pd.read_csv(path, sep='\t')
     tax_order = list(df_emu.columns[1:9])
     if rank not in tax_order:
         raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
     taxa_remaining = tax_order[tax_order.index(rank):]
     # pylint: disable=unsubscriptable-object
-    if 'estimated counts' in df_emu.columns:
+    if "estimated counts" in df_emu.columns:
         df_emu_copy = df_emu[['abundance', 'estimated counts'] + taxa_remaining]
     else:
         df_emu_copy = df_emu[['abundance'] + taxa_remaining]
@@ -516,7 +533,7 @@ def collapse_rank(path, rank):
 
 
 if __name__ == "__main__":
-    __version__ = "3.2.0"
+    __version__ = "3.3.0"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -553,6 +570,9 @@ if __name__ == "__main__":
     abundance_parser.add_argument(
         '--keep-counts', action="store_true",
         help='include estimated read counts in output')
+    abundance_parser.add_argument(
+        '--keep-read-assignments', action="store_true",
+        help='output file of read assignment distribution')
     abundance_parser.add_argument(
         '--output-unclassified', action="store_true",
         help='output unclassified sequences')
@@ -617,11 +637,15 @@ if __name__ == "__main__":
             get_cigar_op_log_probabilities(sam_file)
         log_prob_rgs, counts_unassigned, counts_assigned = log_prob_rgs_dict(
             sam_file, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
-        f_full, f_set_thresh = expectation_maximization_iterations(log_prob_rgs,
+        f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
         freq_to_lineage_df(f_full, f"{out_file}_rel-abundance", df_taxonomy,
                            counts_assigned, counts_unassigned, args.keep_counts)
+
+        if args.keep_read_assignments:
+            output_read_assignments(read_dist, f"{out_file}_read-assignment-distributions")
+
         if f_set_thresh:
             freq_to_lineage_df(
                 f_set_thresh,
