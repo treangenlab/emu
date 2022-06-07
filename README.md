@@ -34,11 +34,11 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
 ```
 
-** Note Emu v3.0+ database requirement differ from previous versions. Check you are using the appropriate database for the version you are running.
+** Note Emu v3.0+ database requirements differ from previous versions. Check you are using the appropriate database for the version you are running.
 
 ##### 2. Activate appropriate conda environment
 
-Emu requires Python version to be in range 3.6.0-3.8.12. 
+Emu requires Python version to be >=3.6. 
 
 ###### Option A: Create new Conda environment
 
@@ -93,6 +93,7 @@ Each step of the installation process is expected to take a matter of seconds.
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
 |--keep-counts| FALSE| include estimated read counts for each species in output|
+|--keep-read-assignments| FALSE| output .tsv file with read assignment distributions|
 |--output-unclassified| FALSE| generate a separate output file of unclassified sequences|
 |--threads| 3| number of threads utilized by minimap2|
 
