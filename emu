@@ -100,7 +100,7 @@ def output_unclassified(sam_path, seq_output_path, input_type):
                     Seq(alignment.query_sequence),
                     id=alignment.query_name,
                     name=alignment.query_name,
-                    letter_annotations={"phred_quality":alignment.query_qualities}
+                    letter_annotations={"phred_quality": alignment.query_qualities}
                 )
                 output_records.append(record)
         SeqIO.write(output_records, f"{seq_output_path}.fq", "fastq")
@@ -332,14 +332,13 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, assigned_count,
         returns(df): pandas df with lineage and abundances for values in f
     """
 
-    results_df = pd.DataFrame(list(zip(freq.keys(), freq.values())),
+    results_df = pd.DataFrame(zip(list(freq.keys()) + ['unassigned'],
+                                  list(freq.values()) + ["-"]),
                               columns=["tax_id", "abundance"]).set_index('tax_id')
-
     results_df = results_df.join(taxonomy_df, how='left').reset_index()
     if counts:
-        results_df["estimated counts"] = results_df["abundance"] * assigned_count
-        unassigned_df = {"estimated counts": unassigned_count, "tax_id": "unassigned_reads"}
-        results_df = results_df.append(unassigned_df, ignore_index=True)
+        counts_series = (results_df["abundance"] * assigned_count)[:-1].append(pd.Series(unassigned_count)).reset_index(drop=True)
+        results_df["estimated counts"] = counts_series
     results_df.to_csv(f"{tsv_output_path}.tsv", sep='\t', index=False)
     return results_df
 
