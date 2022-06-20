@@ -93,7 +93,7 @@ Each step of the installation process is expected to take a matter of seconds.
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
 |--keep-counts| FALSE| include estimated read counts for each species in output|
-|--keep-read-assignments| FALSE| output .tsv file with read assignment distributions|
+|--keep-read-assignments| FALSE| output .tsv file with read assignment distributions: each row as an input read; each entry as the likelihood it is dervied from that taxa (taxid is the column header); each row sums to 1|
 |--output-unclassified| FALSE| generate a separate output file of unclassified sequences|
 |--threads| 3| number of threads utilized by minimap2|
 
