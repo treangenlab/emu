@@ -162,7 +162,7 @@ All software depencies are listed in environment.yml. Emu v3.0.0 has been tested
 
 ### Emu Manuscript
 
-Preprint: [Curry, Kristen, et al. "Emu: Species-Level Microbial Community Profiling for Full-Length Nanopore 16S Reads." bioRxiv (2021).](https://www.biorxiv.org/content/10.1101/2021.05.02.442339v1)
+Publication: [Kristen D. Curry et al., “Emu: Species-Level Microbial Community Profiling of Full-Length 16S RRNA Oxford Nanopore Sequencing Data,” Nature Methods, June 30, 2022, 1–9, https://doi.org/10.1038/s41592-022-01520-4.](https://www.nature.com/articles/s41592-022-01520-4)
 Repository for reproduction of results in manuscript: [Emu-benchmark](https://gitlab.com/treangenlab/emu-benchmark)
 
 
