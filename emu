@@ -159,94 +159,6 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
-# def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
-#     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
-#
-#         sam_path(str): path to sam file
-#         log_p_cigar_op(list(float)): probability for each cigar operation defined in CIGAR_OPS,
-#                                         where p > 0
-#         dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
-#         zero_locs(list(int)): list of indices (int) where probability == 0
-#         return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
-#                 int: unassigned read count
-#                 int: assigned read count
-#     """
-#     # calculate log(L(read|seq)) for all alignments
-#     log_p_rgs, unassigned_set = {}, set()
-#     # pylint: disable=maybe-no-member
-#     sam_filename = pysam.AlignmentFile(sam_path, 'rb')
-#
-#     if not p_cigar_op_zero_locs:
-#         for alignment in sam_filename.fetch():
-#             align_len = get_align_len(alignment)
-#             if alignment.reference_name and align_len:
-#                 cigar_stats = get_align_stats(alignment)
-#                 log_score, query_name, species_tid = \
-#                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
-#                                          dict_longest_align, align_len)
-#                 if (((query_name, species_tid) not in log_p_rgs or
-#                      log_p_rgs[(query_name, species_tid)] < log_score)):
-#                     log_p_rgs[(query_name, species_tid)] = log_score
-#             else:
-#                 unassigned_set.add(alignment.query_name)
-#     else:
-#         for alignment in sam_filename.fetch():
-#             align_len = get_align_len(alignment)
-#             if alignment.reference_name and align_len:
-#                 cigar_stats = get_align_stats(alignment)
-#                 if sum([cigar_stats[x] for x in p_cigar_op_zero_locs]) == 0:
-#                     for i in sorted(p_cigar_op_zero_locs, reverse=True):
-#                         del cigar_stats[i]
-#                     log_score, query_name, species_tid = \
-#                         compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
-#                                              dict_longest_align, align_len)
-#                     if (((query_name, species_tid) not in log_p_rgs or
-#                          log_p_rgs[(query_name, species_tid)] < log_score)):
-#                         log_p_rgs[(query_name, species_tid)] = log_score
-#             else:
-#                 unassigned_set.add(alignment.query_name)
-#
-#     assigned_reads = set(unflatten(log_p_rgs).keys())
-#     unassigned_reads = unassigned_set - assigned_reads
-#     unassigned_count = len(unassigned_reads)
-#     stdout.write(f"Unassigned read count: {unassigned_count}\n")
-#
-#     ## remove if p(r|s) < 0.01
-#     #min_p_thresh = math.log(0.01)
-#     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
-#     return log_p_rgs, unassigned_count, len(assigned_reads)
-#
-#
-# def expectation_maximization(log_p_rgs, freq):
-#     """One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
-#             probabilities in log_L_rgs.
-#
-#         log_p_rgs({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
-#         freq{int:float}: dict[species_tax_id]:likelihood species is present in sample
-#         returns: f {int:float}: dict[species_tax_id]:updated likelihood species is present in sample
-#                 total_log_likelihood (float): log likelihood updated f is accurate
-#     """
-#     # log_p_rns = log(L(r|s))+log(f(s)) for each alignment
-#     log_p_rns = {}
-#     for (read, seq) in log_p_rgs:
-#         if read == 'M03901:356:000000000-J6PDG:1:1101:5788:6391':
-#             print((read,seq))
-#         if seq in freq and freq[seq] != 0:
-#             log_p_rns[(read, seq)] = (log_p_rgs[(read, seq)] + math.log(freq[seq]))
-#     log_c = {r: -max(smap.values()) for r, smap in unflatten(log_p_rns).items()}
-#     p_rns_c = {(r, s): (math.e ** (v + log_c[r])) for (r, s), v in log_p_rns.items()}
-#     p_r_c = {r: sum(s.values()) for r, s in unflatten(p_rns_c).items()}
-#
-#     # P(s|r), likelihood read r emanates db seq s
-#     p_sgr = unflatten({(seq, read): v / p_r_c[read] for (read, seq), v in p_rns_c.items()})
-#
-#     # update total likelihood and f vector
-#     log_p_r = {read: math.log(v) - log_c[read] for read, v in p_r_c.items()}
-#     n_reads = len(log_p_r)
-#     return {seq: (sum(r_map.values()) / n_reads)
-#             for seq, r_map in p_sgr.items()}, \
-#            sum(log_p_r.values()), p_sgr
-
 def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
 
@@ -273,16 +185,14 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
                                          dict_longest_align, align_len)
 
-                #species_arr, logscore_arr = [], []
+                species_arr, logscore_arr = [], []
                 if query_name not in log_p_rgs:
-                    #species_arr.append(species_tid), logscore_arr.append(log_score)
-                    #log_p_rgs[query_name] = (species_arr, logscore_arr)
-                    log_p_rgs[query_name] = ([species_tid], [log_score])
+                    species_arr.append(species_tid), logscore_arr.append(log_score)
+                    log_p_rgs[query_name] = (species_arr, logscore_arr)
                 elif query_name in log_p_rgs:
                     if species_tid not in log_p_rgs[query_name][0]:
-                        #species_arr.append(species_tid), logscore_arr.append(log_score)
-                        #log_p_rgs[query_name] = (log_p_rgs[query_name][0] + species_arr, log_p_rgs[query_name][1] + logscore_arr)
-                        log_p_rgs[query_name] = (log_p_rgs[query_name][0] + [species_tid], log_p_rgs[query_name][1] + [log_score])
+                        species_arr.append(species_tid), logscore_arr.append(log_score)
+                        log_p_rgs[query_name] = (log_p_rgs[query_name][0] + species_arr, log_p_rgs[query_name][1] + logscore_arr)
                     else:
                         logprgs_idx = log_p_rgs[query_name][0].index(species_tid)
                         if log_p_rgs[query_name][1][logprgs_idx] < log_score:
@@ -364,8 +274,7 @@ def expectation_maximization(log_p_rgs, freq):
         for s1 in range(np.shape(log_p_rgs[r1][0])[0]):
             s1_val = log_p_rgs[r1][0][s1]
             if s1_val in freq and freq[s1_val] != 0:
-                # calculates log(L(r|s))+log(f(s)) for each sequence
-                logprns_val = log_p_rgs[r1][1][s1] + math.log(freq[s1_val])
+                logprns_val = log_p_rgs[r1][1][s1] + math.log(freq[s1_val])# calculates log(L(r|s))+log(f(s)) for each sequence
                 valid_seq[count] = s1_val
                 log_p_rns[count] = logprns_val
                 count += 1
