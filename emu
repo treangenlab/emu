@@ -161,143 +161,6 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
-# def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
-#     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
-#
-#         sam_path(str): path to sam file
-#         log_p_cigar_op(list(float)): probability for each cigar operation defined in CIGAR_OPS,
-#                                         where p > 0
-#         dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
-#         zero_locs(list(int)): list of indices (int) where probability == 0
-#         return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
-#                 int: unassigned read count
-#                 int: assigned read count
-#     """
-#     # calculate log(L(read|seq)) for all alignments
-#     logprgs_temp, unassigned_set = {}, set()
-#     # pylint: disable=maybe-no-member
-#     sam_filename = pysam.AlignmentFile(sam_path, 'rb')
-#
-#     if not p_cigar_op_zero_locs:
-#         for alignment in sam_filename.fetch():
-#             align_len = get_align_len(alignment)
-#             if alignment.reference_name and align_len:
-#                 cigar_stats = get_align_stats(alignment)
-#                 log_score, query_name, species_tid = \
-#                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
-#                                          dict_longest_align, align_len)
-#
-#                 if query_name not in logprgs_temp:
-#                     logprgs_temp[query_name] = [(species_tid, log_score)]
-#                 elif query_name in logprgs_temp:
-#                     if species_tid not in set(species for species, _ in logprgs_temp[query_name]):
-#                         logprgs_temp[query_name] = logprgs_temp[query_name] + [(species_tid, log_score)]
-#                     else:
-#                         print(logprgs_temp)
-#                         logprgs_idx = [logprgs_temp[query_name].index(existing, _) for (existing, _) in logprgs_temp[query_name] if existing == species_tid]
-#
-#                         #logprgs_idx = log_p_rgs[query_name][0].index(species_tid)
-#                         if logprgs_temp[query_name][logprgs_idx[0]][1] < log_score:
-#                             logprgs_temp[query_name][logprgs_idx[0]] = (species_tid, log_score)
-#
-#             else:
-#                 unassigned_set.add(alignment.query_name)
-#     else:
-#         for alignment in sam_filename.fetch():
-#             align_len = get_align_len(alignment)
-#             if alignment.reference_name and align_len:
-#                 cigar_stats = get_align_stats(alignment)
-#                 if sum([cigar_stats[x] for x in p_cigar_op_zero_locs]) == 0:
-#                     for i in sorted(p_cigar_op_zero_locs, reverse=True):
-#                         del cigar_stats[i]
-#                     log_score, query_name, species_tid = \
-#                         compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
-#                                              dict_longest_align, align_len)
-#
-#                     species_arr, logscore_arr = [], []
-#                     if query_name not in logprgs_temp:
-#                         species_arr.append(species_tid), logscore_arr.append(log_score)
-#                         logprgs_temp[query_name] = (species_arr, logscore_arr)
-#                     elif query_name in logprgs_temp and species_tid not in logprgs_temp[query_name][0]:
-#                         species_arr.append(species_tid), logscore_arr.append(log_score)
-#                         logprgs_temp[query_name] = (logprgs_temp[query_name][0] + species_arr, logprgs_temp[query_name][1] + logscore_arr)
-#                     else:
-#                         logprgs_idx = logprgs_temp[query_name][0].index(species_tid)
-#                         if logprgs_temp[query_name][1][logprgs_idx] < log_score:
-#                             logprgs_temp[query_name][1][logprgs_idx] = log_score
-#             else:
-#                 unassigned_set.add(alignment.query_name)
-#
-#     log_p_rgs = {query: np.array(logprgs_temp[query]) for query in logprgs_temp}
-#     # for query in log_p_rgs:
-#     #     log_p_rgs[query] = np.array(log_p_rgs[query])
-#
-#     assigned_reads = set(logprgs_temp.keys())
-#     unassigned_reads = unassigned_set - assigned_reads
-#     unassigned_count = len(unassigned_reads)
-#     stdout.write(f"Unassigned read count: {unassigned_count}\n")
-#
-#     ## remove if p(r|s) < 0.01
-#     #min_p_thresh = math.log(0.01)
-#     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
-#     return log_p_rgs, unassigned_count, len(assigned_reads)
-
-# def expectation_maximization(log_p_rgs, freq):
-#     """
-#     One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
-#                 probabilities in log_p_rgs.
-#
-#     In each iteration, P(s|r), the probabilities of a read given a sequence, is calculated according to the current frequency vector.
-#     First, L(r|s) * f(s) is calculated, then a fixed multiplier, C, is calculated for each read. The fixed multiplier is then multiplied
-#     by L(r|s)*f(s), L(r|s) * f(s) * c. Then sum(L(r|s) * f(s) * c) for each sequence is calculated. Then
-#     (L(r|s) * f(s) * c) / (sum(L(r|s) * f(s) * c) for each sequence), is calculated. All calculations are done in log space.
-#     The frequency vector is then recalculated using the P(s|r) values, and the total log likelihood is updated.
-#
-#     log_p_rgs({str:(int, float)}): dict[query_name]=(ref_tax_id, log(L(query_name|ref_tax_id)))
-#     freq{int:float}: dict[species_tax_id]:likelihood species is present in sample
-#     returns: f {int:float}: dict[species_tax_id]:updated likelihood species is present in sample
-#             total_log_likelihood (float): log likelihood updated f is accurate
-#             p_sgr {str: {int:float}}: probability of a read given the sequence
-#     """
-#     p_sgr_flat = {}
-#     logpr_sum, n_reads = 0, 0
-#     for r1 in log_p_rgs:
-#
-#         n_valid = sum([1 if i in freq and freq[i]!=0 else 0 for (i, _) in log_p_rgs[r1]])
-#         if n_valid == 0:
-#             continue
-#
-#         valid_seq = np.zeros([n_valid])
-#         log_p_rns = np.zeros([n_valid])
-#         n_reads += 1
-#
-#         #check if sequences were found in frequency vector
-#         count = 0
-#         for s1 in range(np.shape(log_p_rgs[r1])[0]):
-#             s1_val, _ = log_p_rgs[r1][s1]
-#             if s1_val in freq and freq[s1_val] != 0:
-#                 logprns_val = log_p_rgs[r1][1][s1] + math.log(freq[s1_val])# calculates log(L(r|s))+log(f(s)) for each sequence
-#                 valid_seq[count] = s1_val
-#                 log_p_rns[count] = logprns_val
-#                 count += 1
-#
-#         logc = -np.max(log_p_rns) #calculate fixed multiplier, c
-#         prnsc = np.exp(log_p_rns + logc) #calculates exp(log(L(r|s) * f(s) * c))
-#         prc = np.sum(prnsc) #calculates sum of (L(r|s) * f(s) * c) for each read
-#         logpr_sum += (math.log(prc) - logc) #add to sum of log likelihood
-#
-#         #calculates P(s|r) for each sequence
-#         for s2 in range(n_valid):
-#             s2_val = valid_seq[s2]
-#             p_sgr_flat[(s2_val, r1)] = prnsc[s2] / prc
-#     p_sgr = unflatten(p_sgr_flat)
-#
-#     #calculates updated frequency vector
-#     frq = {}
-#     for s3, r3 in p_sgr.items():
-#         frq[s3] = sum(r3.values()) / n_reads
-#
-#     return frq, logpr_sum, p_sgr
 
 def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
@@ -312,7 +175,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                 int: assigned read count
     """
     # calculate log(L(read|seq)) for all alignments
-    logprgs_temp, unassigned_set = {}, set()
+    log_p_rgs, unassigned_set = {}, set()
     # pylint: disable=maybe-no-member
     sam_filename = pysam.AlignmentFile(sam_path, 'rb')
 
@@ -325,22 +188,18 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
                                          dict_longest_align, align_len)
 
-                #[species_tid if query_name not in log_p_rgs]
-                #[log_score if query_name not in log_p_rgs]
-                #log_p_rgs[query_name] = ([species_tid if query_name not in log_p_rgs], [log_score if query_name not in log_p_rgs])
                 species_arr, logscore_arr = [], []
-                if query_name not in logprgs_temp:
+                if query_name not in log_p_rgs:
                     species_arr.append(species_tid), logscore_arr.append(log_score)
-                    logprgs_temp[query_name] = (species_arr, logscore_arr)
-                elif query_name in logprgs_temp:
-                    #log_p_rgs[query_name] = (log_p_rgs[query_name][0] + [species_tid if species_tid not in log_p_rgs[query_name][0]], log_p_rgs[query_name][1] + [log_score if species_tid not in log_p_rgs[query_name][0]])
-                    if species_tid not in logprgs_temp[query_name][0]:
+                    log_p_rgs[query_name] = (species_arr, logscore_arr)
+                elif query_name in log_p_rgs:
+                    if species_tid not in log_p_rgs[query_name][0]:
                        species_arr.append(species_tid), logscore_arr.append(log_score)
-                       logprgs_temp[query_name] = (logprgs_temp[query_name][0] + species_arr, logprgs_temp[query_name][1] + logscore_arr)
+                       log_p_rgs[query_name] = (log_p_rgs[query_name][0] + species_arr, log_p_rgs[query_name][1] + logscore_arr)
                     else:
-                        logprgs_idx = logprgs_temp[query_name][0].index(species_tid)
-                        if logprgs_temp[query_name][1][logprgs_idx] < log_score:
-                            logprgs_temp[query_name][1][logprgs_idx] = log_score
+                        logprgs_idx = log_p_rgs[query_name][0].index(species_tid)
+                        if log_p_rgs[query_name][1][logprgs_idx] < log_score:
+                            log_p_rgs[query_name][1][logprgs_idx] = log_score
 
             else:
                 unassigned_set.add(alignment.query_name)
@@ -357,22 +216,21 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                                              dict_longest_align, align_len)
 
                     species_arr, logscore_arr = [], []
-                    if query_name not in logprgs_temp:
+                    if query_name not in log_p_rgs:
                         species_arr.append(species_tid), logscore_arr.append(log_score)
-                        logprgs_temp[query_name] = (species_arr, logscore_arr)
-                    elif query_name in logprgs_temp and species_tid not in logprgs_temp[query_name][0]:
+                        log_p_rgs[query_name] = (species_arr, logscore_arr)
+                    elif query_name in log_p_rgs and species_tid not in log_p_rgs[query_name][0]:
                         species_arr.append(species_tid), logscore_arr.append(log_score)
-                        logprgs_temp[query_name] = (logprgs_temp[query_name][0] + species_arr, logprgs_temp[query_name][1] + logscore_arr)
+                        log_p_rgs[query_name] = (log_p_rgs[query_name][0] + species_arr, log_p_rgs[query_name][1] + logscore_arr)
                     else:
-                        logprgs_idx = logprgs_temp[query_name][0].index(species_tid)
-                        if logprgs_temp[query_name][1][logprgs_idx] < log_score:
-                            logprgs_temp[query_name][1][logprgs_idx] = log_score
+                        logprgs_idx = log_p_rgs[query_name][0].index(species_tid)
+                        if log_p_rgs[query_name][1][logprgs_idx] < log_score:
+                            log_p_rgs[query_name][1][logprgs_idx] = log_score
             else:
                 unassigned_set.add(alignment.query_name)
 
-    log_p_rgs = {query: (np.array(logprgs_temp[query][0], dtype=np.int32), np.array(logprgs_temp[query][1], dtype=np.float64)) for query in logprgs_temp}
-    #for query in logprgs_temp:
-        #logprgs_temp[query] = (np.array(logprgs_temp[query][0], dtype=np.int32), np.array(logprgs_temp[query][1], dtype=np.float64))
+    for query in log_p_rgs:
+        log_p_rgs[query] = (np.array(log_p_rgs[query][0], dtype=np.int32), np.array(log_p_rgs[query][1], dtype=np.float64))
 
     assigned_reads = set(log_p_rgs.keys())
     unassigned_reads = unassigned_set - assigned_reads
@@ -497,23 +355,6 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         counter += 1
 
 
-# def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
-#     """Retrieve dict of lineage for given taxid
-#
-#         tid(int): tax id to retrieve lineage dict
-#         nodes_df(df): pandas df of nodes.dmp with columns ['tax_id', 'parent_tax_id', 'rank'];
-#                             tax_id as index
-#         names_df(df): pandas df of names.dmp with columns ['tax_id', 'name_txt']; tax_id as index
-#         return {str:str}: dict[rank]:taxonomy name at rank
-#     """
-#     lineage_dict = {}
-#     while names_dict[taxid] != "root":
-#         tup = nodes_dict[taxid]
-#         lineage_dict[tup[1]] = names_dict[taxid]
-#         taxid = tup[0]
-#         #print(lineage_dict)
-#     return lineage_dict
-
 def temp_lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """Retrieve dict of lineage for given taxid
 
@@ -565,6 +406,7 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, assigned_count,
     results_df.to_csv(f"{tsv_output_path}.tsv", sep='\t', index=False)
     return results_df
 
+
 def generate_alignments(in_file_list, out_basename, database):
     """ Generate .sam alignment file
 
@@ -585,6 +427,7 @@ def generate_alignments(in_file_list, out_basename, database):
             shell=True)
     return sam_align_file
 
+
 def output_read_assignments(p_sgr, tsv_output_path):
     """ Output file of read assignment distributions for all
 
@@ -596,6 +439,7 @@ def output_read_assignments(p_sgr, tsv_output_path):
     dist_df = pd.DataFrame(p_sgr)
     dist_df.to_csv(f"{tsv_output_path}.tsv", sep='\t')
     return dist_df
+
 
 def create_nodes_dict(nodes_path):
     """convert nodes.dmp file into pandas dataframe
@@ -624,35 +468,6 @@ def create_names_dict(names_path):
     names_df = names_df.drop(columns=['unique_name', 'name_class'])
     return dict(zip(names_df['tax_id'], names_df['name_txt']))
 
-# def build_taxonomy(unique_tids, nodes_dict, names_dict, threads):
-#     """Converts freq to a pandas df where each row contains abundance and tax lineage for
-#                 classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
-#
-#         unique_tids(list): list of ints of each unique taxid in list of database sequences
-#         nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
-#                                         tuple ('parent_taxid', 'rank') as values
-#         names_dict{int:str}: pandas dict of names.dmp with 'tax_id' as keys,
-#                                         'name_txt' as values
-#         threads(int): number of threads to use in parallelization
-#         returns(df): pandas df with lineage for all taxids in unique_tids
-#     """
-#     pandarallel.initialize(nb_workers=threads)
-#     results_df = pd.DataFrame(list(unique_tids), columns=["tax_id"])
-#     lineages = results_df["tax_id"].parallel_apply\
-#         (lambda x: lineage_dict_from_tid(x, nodes_dict, names_dict))
-#
-#     results_df = pd.concat([results_df, pd.json_normalize(lineages)], axis=1)
-#
-#     header_order = ["tax_id", "species", "genus", "family", "order", "class",
-#                     "phylum", "clade", "superkingdom", "subspecies",
-#                     "species subgroup", "species group"]
-#     for col in header_order:
-#         if col not in results_df.columns:
-#             results_df[col] = ""
-#     results_df = results_df.sort_values(header_order[8:0:-1]).reset_index(drop=True)
-#     results_df = results_df.reindex(header_order, axis=1)
-#     #print(results_df.to_string())
-#     return results_df
 
 def temp_build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
     """Converts freq to a pandas df where each row contains abundance and tax lineage for
@@ -779,11 +594,6 @@ def collapse_rank(path, rank):
     df_emu_copy.to_csv(output_path, sep='\t')
     stdout.write(f"File generated: {output_path}\n")
 
-def json_write(fpath, ob):
-    '''wraps json.dump()'''
-    t = open(fpath, 'w')
-    json.dump(ob,t, indent=2)
-    t.close()
 
 if __name__ == "__main__":
     __version__ = "3.3.0"
@@ -929,8 +739,6 @@ if __name__ == "__main__":
         dict_nodes = create_nodes_dict(args.nodes)
         seq2tax = create_seq2tax_dict(args.seq2tax, dict_nodes)
         #db_unique_ids = set(seq2tax.values())
-
-        #json_write("db_ids_short.json", list(db_unique_ids)[:50])
 
         temp_ids_f = open("db_ids_short.json")
         temp_ids = set(json.load(temp_ids_f))
