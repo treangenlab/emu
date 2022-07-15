@@ -525,15 +525,18 @@ def temp_lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """
     classes = ["tax_id", "species", "genus", "family", "order", "class",
                     "phylum", "clade", "superkingdom", "subspecies",
-                    "species subgroup", "species group", "no rank"]
-    lineage_list = [""] * 13
+                    "species subgroup", "species group"]
+    lineage_list = [""] * 12
     while names_dict[taxid] != "root":
         tup = nodes_dict[taxid]
         if lineage_list[0] == "":
             lineage_list[0] = taxid
-        idx = classes.index(tup[1])
-        lineage_list[idx] = names_dict[taxid]
-        taxid = tup[0]
+        elif tup[1] in classes:
+            idx = classes.index(tup[1])
+            lineage_list[idx] = names_dict[taxid]
+            taxid = tup[0]
+        else:
+            taxid = tup[0]
         # print(lineage_dict)
     return tuple(lineage_list)
 
@@ -671,7 +674,7 @@ def temp_build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
     f.write(dummy_str % tuple(header_order))
     for id in unique_tids:
         lst = temp_lineage_dict_from_tid(id, nodes_dict, names_dict)
-        f.write(dummy_str % lst[0:12])
+        f.write(dummy_str % lst)
     f.close()
 
 
@@ -930,15 +933,14 @@ if __name__ == "__main__":
         #json_write("db_ids_short.json", list(db_unique_ids)[:50])
 
         temp_ids_f = open("db_ids_short.json")
-        temp_ids = json.load(temp_ids_f)
+        temp_ids = set(json.load(temp_ids_f))
 
-        #
         dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
         fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
         SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
 
-        file_location = os.path.join(custom_db_path, "taxonomy.txt")
-        temp_df_taxonomy = temp_build_taxonomy(set(temp_ids), dict_nodes, dict_names, file_location)
+        file_location = os.path.join(custom_db_path, "taxonomytest_short(50).txt")
+        temp_df_taxonomy = temp_build_taxonomy(temp_ids, dict_nodes, dict_names, file_location)
         stdout.write("Database creation successful\n")
 
     if args.subparser_name == "collapse-taxonomy":
