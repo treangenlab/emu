@@ -24,7 +24,7 @@ from Bio.SeqRecord import SeqRecord
 # static global variables
 CIGAR_OPS = [1, 2, 4, 10]
 CIGAR_OPS_ALL = [0, 1, 2, 4]
-TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
+TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 
 
 def validate_input(path):
@@ -509,7 +509,7 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, assigned_count,
     """
     #add tax lineage for values in freq
     results_df = pd.DataFrame(zip(list(freq.keys()) + ['unassigned'],
-                                  list(freq.values()) + ["-"]),
+                                  list(freq.values()) + [0]),
                               columns=["tax_id", "abundance"]).set_index('tax_id')
     results_df = results_df.join(taxonomy_df, how='left').reset_index()
     #add in the estimated count values for the assigned and unassigned counts
@@ -710,20 +710,21 @@ def collapse_rank(path, rank):
             "order", "class", "phylum", "clade", "superkingdom"]
     """
     df_emu = pd.read_csv(path, sep='\t')
-    tax_order = list(df_emu.columns[1:9])
-    # check if rank is found within tax_order
-    if rank not in tax_order:
+    if rank not in TAXONOMY_RANKS:
         raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
-        # raise ValueError("Specified rank must be in list: {}".format(TAXONOMY_RANKS))
-    taxa_remaining = tax_order[tax_order.index(rank):]
-    # pylint: disable=unsubscriptable-object
-    # check if estimated counts is a header for the pandas df
+    keep_ranks = TAXONOMY_RANKS[TAXONOMY_RANKS.index(rank):]
+    for r in keep_ranks:
+        if r not in df_emu.columns:
+            keep_ranks.remove(r)
     if "estimated counts" in df_emu.columns:
-        df_emu_copy = df_emu[['abundance', 'estimated counts'] + taxa_remaining]
+        df_emu_copy = df_emu[['abundance', 'estimated counts'] + keep_ranks]
+        df_emu_copy = df_emu_copy.replace({'-': 0}, regex=True)
+        df_emu_copy = df_emu_copy.astype({'abundance': 'float', 'estimated counts': 'float'})
     else:
-        df_emu_copy = df_emu[['abundance'] + taxa_remaining]
-    df_emu_copy = df_emu_copy.groupby(taxa_remaining, dropna=False).sum()
-    # save file to path
+        df_emu_copy = df_emu[['abundance'] + keep_ranks]
+        df_emu_copy = df_emu_copy.replace({'-': 0}, regex=True)
+        df_emu_copy = df_emu_copy.astype({'abundance': 'float'})
+    df_emu_copy = df_emu_copy.groupby(keep_ranks, dropna=False).sum()
     output_path = f"{os.path.splitext(path)[0]}-{rank}.tsv"
     # output_path = "{}-{}.tsv".format(os.path.splitext(path)[0], rank)
     df_emu_copy.to_csv(output_path, sep='\t')
@@ -732,7 +733,7 @@ def collapse_rank(path, rank):
 
 
 if __name__ == "__main__":
-    __version__ = "3.3.0"
+    __version__ = "3.3.1"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
