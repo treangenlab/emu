@@ -474,10 +474,10 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
         elif tup[1] in ranks:
             idx = ranks.index(tup[1])
             lineage_list[idx] = names_dict[taxid]
-        taxid = tup[0]
+            taxid = tup[0]
         # if the taxonomic rank does not need to be recorded, then move on to the next node
-        # else:
-        #     taxid = tup[0]
+        else:
+            taxid = tup[0]
     return tuple(lineage_list)
 
 
