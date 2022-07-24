@@ -64,6 +64,7 @@ conda config --add channels bioconda
 conda config --add channels conda-forge
 conda install emu
 ```
+Although not required, we recommend using minimap2 version >=2.22 to avoid memory leak [bug with highly repetitive sequences] (https://github.com/lh3/minimap2/releases).
 
 ###### Option B: Create local Emu conda environment
 
