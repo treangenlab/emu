@@ -448,6 +448,9 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
         counter += 1
 
+ranks = ["tax_id", "species", "genus", "family", "order", "class",
+                "phylum", "clade", "superkingdom", "subspecies",
+                "species subgroup", "species group"]
 
 def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """For each given taxid, traverse the node_dict to build the lineage, and record the tax id
@@ -458,11 +461,8 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
                                         tuple ('parent_taxid', 'rank') as values
         names_dict{int:str}: dict of names.dmp with 'tax_id' as keys,
                                         'name_txt' as values
-        return (str): a tuple containing the scientific name for each taxonomic rank for the given taxid
+        return (tuple): a tuple containing the scientific name for each taxonomic rank for the given taxid
     """
-    classes = ["tax_id", "species", "genus", "family", "order", "class",
-                    "phylum", "clade", "superkingdom", "subspecies",
-                    "species subgroup", "species group"]
     lineage_list = [""] * 12
     # traverse the nodes to create the lineage
     while names_dict[taxid] != "root":
@@ -471,13 +471,13 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
         if lineage_list[0] == "":
             lineage_list[0] = taxid
         # find the name for each taxonomic rank
-        elif tup[1] in classes:
-            idx = classes.index(tup[1])
+        elif tup[1] in ranks:
+            idx = ranks.index(tup[1])
             lineage_list[idx] = names_dict[taxid]
-            taxid = tup[0]
+        taxid = tup[0]
         # if the taxonomic rank does not need to be recorded, then move on to the next node
-        else:
-            taxid = tup[0]
+        # else:
+        #     taxid = tup[0]
     return tuple(lineage_list)
 
 
@@ -584,14 +584,11 @@ def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
     """
     f = open(filepath, 'w')
     # write the header to the file
-    header_order = ["tax_id", "species", "genus", "family", "order", "class",
-                    "phylum", "clade", "superkingdom", "subspecies",
-                    "species subgroup", "species group"]
-    dummy_str = '\t'.join(['%s',] * len(header_order)) + '\n'
-    f.write(dummy_str % tuple(header_order))
+    dummy_str = '\t'.join(['%s',] * len(ranks)) + '\n'
+    f.write(dummy_str % tuple(ranks))
     # write each lineage as a row in the file
-    for id in unique_tids:
-        lst = lineage_dict_from_tid(id, nodes_dict, names_dict)
+    for tid in unique_tids:
+        lst = lineage_dict_from_tid(tid, nodes_dict, names_dict)
         f.write(dummy_str % lst)
     f.close()
 
@@ -863,7 +860,7 @@ if __name__ == "__main__":
         SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
 
         # build taxonomy for database
-        file_location = os.path.join(custom_db_path, "taxonomy.txt")
+        file_location = os.path.join(custom_db_path, "taxonomy.tsv")
         temp_df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
         stdout.write("Database creation successful\n")
 
