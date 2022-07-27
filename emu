@@ -25,6 +25,10 @@ from Bio.SeqRecord import SeqRecord
 CIGAR_OPS = [1, 2, 4, 10]
 CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+RANKS = ["tax_id", "species", "genus", "family", "order", "class",
+                "phylum", "clade", "superkingdom", "subspecies",
+                "species subgroup", "species group"]
+
 
 
 def validate_input(path):
@@ -160,6 +164,7 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
+
 # def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
 #     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
 #
@@ -189,7 +194,6 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #                 species_arr, logscore_arr = [], []
 #                 if query_name not in log_p_rgs:
 #                     species_arr.append(species_tid), logscore_arr.append(log_score)
-#                     log_p_rgs[query_name] = (species_arr, logscore_arr)
 #                 elif query_name in log_p_rgs:
 #                     if species_tid not in log_p_rgs[query_name][0]:
 #                        species_arr.append(species_tid), logscore_arr.append(log_score)
@@ -236,8 +240,8 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #     #min_p_thresh = math.log(0.01)
 #     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
 #     return log_p_rgs, unassigned_count, len(assigned_reads)
-#
-#
+
+
 # def expectation_maximization(log_p_rgs, freq):
 #     """
 #     One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
@@ -271,7 +275,7 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #                 valid_seq.append(s1_val)
 #                 log_p_rns.append(logprns_val)
 #
-#         np.array([valid_seq]), np.array([log_p_rns])
+#         np.array([valid_seq], dtype=np.int32), np.array([log_p_rns], dtype=np.float64)
 #
 #         if len(valid_seq) != 0:
 #             logc = -np.max(log_p_rns)  # calculate fixed multiplier, c
@@ -290,6 +294,7 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #     # calculates updated frequency vector
 #     frq = {s3: sum(r3.values()) / n_reads for s3, r3 in p_sgr.items()}
 #     return frq, logpr_sum, p_sgr
+
 
 def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
@@ -389,6 +394,7 @@ def expectation_maximization(log_p_rgs, freq):
             for seq, r_map in p_sgr.items()}, \
            sum(log_p_r.values()), p_sgr #frequency vector, total log likelihood, P(s|r)
 
+
 def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold):
     """Full expectation maximization algorithm for alignments in log_L_rgs dict. Calls the expectation_maximization
     function during each iteration of the algorithm. Stops iterations once the log likelihood is calculated to have increased
@@ -446,16 +452,12 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
         counter += 1
 
-ranks = ["tax_id", "species", "genus", "family", "order", "class",
-                "phylum", "clade", "superkingdom", "subspecies",
-                "species subgroup", "species group"]
-
 def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """For each given taxid, traverse the node_dict to build the lineage, and record the tax id
             for each taxonomic rank using the names_dict.
 
         tid(int): tax id to retrieve lineage dict
-        nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
+        nodes_dict{int:(int, str)}: dict of nodes.dmp with 'tax_id' as keys,
                                         tuple ('parent_taxid', 'rank') as values
         names_dict{int:str}: dict of names.dmp with 'tax_id' as keys,
                                         'name_txt' as values
@@ -469,8 +471,8 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
         if lineage_list[0] == "":
             lineage_list[0] = taxid
         # find the name for each taxonomic rank
-        elif tup[1] in ranks:
-            idx = ranks.index(tup[1])
+        elif tup[1] in RANKS:
+            idx = RANKS.index(tup[1])
             lineage_list[idx] = names_dict[taxid]
             taxid = tup[0]
         # if the taxonomic rank does not need to be recorded, then move on to the next node
@@ -579,8 +581,8 @@ def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
     """
     f = open(filepath, 'w')
     # write the header to the file
-    dummy_str = '\t'.join(['%s',] * len(ranks)) + '\n'
-    f.write(dummy_str % tuple(ranks))
+    dummy_str = '\t'.join(['%s',] * len(RANKS)) + '\n'
+    f.write(dummy_str % tuple(RANKS))
     # write each lineage as a row in the file
     for tid in unique_tids:
         lst = lineage_dict_from_tid(tid, nodes_dict, names_dict)
