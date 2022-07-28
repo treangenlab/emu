@@ -570,7 +570,7 @@ def create_names_dict(names_path):
 
 
 def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
-    """Creates a text file where for each id in unique_tids a tax lineage is written to the file.
+    """Creates a tsv file where for each id in unique_tids a tax lineage is written to the file.
             each value of the tax lineage is seperated by a tab.
 
         unique_tids(list): list of ints of each unique taxid in list of database sequences
@@ -702,6 +702,47 @@ def collapse_rank(path, rank):
     stdout.write("File generated: {}\n".format(output_path))
 
 
+#silva database
+def silva_seq2tax(seq2tax_path):
+    """Convert seqid-taxid mapping in seq2tax_path to dict mapping SILVA seqid to corresponding taxid
+
+        seq2tax_path(str): path to seqid-taxid mapping file
+        returns {str:int}: dict[seqid] = species taxid
+    """
+    with open(seq2tax_path) as file:
+        seq2_taxid = {}
+        for line in file:
+            (seqid, taxid) = line.rstrip().split("\t")
+            seq2_taxid[seqid] = taxid
+    return seq2_taxid
+
+def silva_taxonomy(tid_set, lineage_path, taxonomy_file):
+    """Create a tsv file that contains the taxid and the corresponding lineage for the SILVA database
+
+        tid_set(set): set containing all taxids to add to the database
+        lineage_path(str): path to file containing the lineage in the first column and the taxid in next column
+        taxonomy_file(str): path to tsv file containing lineages
+    """
+    f = open(taxonomy_file, 'w')
+    with open(lineage_path) as file:
+        for line in file:
+            whole = line.split("\t") #[full linegae, taxid, rank, version]
+            id = whole[1] #retrieve the taxid
+            #check if the taxid is in the set and write lineage to file
+            if id in tid_set:
+                lin_line = whole[0].split(";")[:-1]
+                f.write(id)
+                f.write("\t")
+                for i in lin_line:
+                    f.write(i)
+                    f.write("\t")
+                f.write("\n")
+            else:
+                continue
+    f.close()
+
+
+
 if __name__ == "__main__":
     __version__ = "3.3.1"
     parser = argparse.ArgumentParser()
@@ -778,6 +819,16 @@ if __name__ == "__main__":
     collapse_parser.add_argument(
         'rank', type=str,
         help='collapsed taxonomic rank')
+
+    silva_parser = subparsers.add_parser("silva-database", help="Build database from SILVA files")
+    silva_parser.add_argument(
+        'silva_db_name', type=str,
+        help='custom database name')
+    silva_parser.add_argument(
+        '--seq2tax', type=str,
+        help='path to tsv mapping species tax id to fasta sequence headers')
+    silva_parser.add_argument("--lineage-taxid", type=str, help="path to file mapping full lineage to corresponding taxid")
+
     args = parser.parse_args()
 
 
@@ -858,8 +909,23 @@ if __name__ == "__main__":
 
         # build taxonomy for database
         file_location = os.path.join(custom_db_path, "taxonomy.tsv")
-        temp_df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
+        df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
         stdout.write("Database creation successful\n")
 
     if args.subparser_name == "collapse-taxonomy":
         collapse_rank(args.input_path, args.rank)
+
+    #build silva database
+    if args.subparser_name == "silva-database":
+        emu_db_path = os.getcwd()
+        silva_db_path = os.path.join(emu_db_path, args.silva_db_name)
+        if not os.path.exists(silva_db_path):
+            os.makedirs(silva_db_path)
+        stdout.write("Emu custom database generating at path: {} ...\n".format(silva_db_path))
+
+        silva_seq2tax = silva_seq2tax(args.seq2tax)
+        silva_unique_ids = set(silva_seq2tax.values())
+
+        silva_db_location = os.path.join(silva_db_path, "taxonomy.tsv")
+        silva_taxonomy = silva_taxonomy(silva_unique_ids, args.lineage_taxid, silva_db_location)
+        stdout.write("Database creation successful\n")
