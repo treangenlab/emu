@@ -570,10 +570,10 @@ def create_names_dict(names_path):
 
 
 def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
-    """Creates a text file where for each id in unique_tids a tax lineage is written to the file.
+    """Creates a tsv file where for each id in unique_tids a tax lineage is written to the file.
             each value of the tax lineage is seperated by a tab.
 
-        unique_tids(list): list of ints of each unique taxid in list of database sequences
+        unique_tids(set): set of ints of each unique taxid in list of database sequences
         nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
                                         tuple ('parent_taxid', 'rank') as values
         names_dict{int:str}: pandas dict of names.dmp with 'tax_id' as keys,
@@ -858,7 +858,7 @@ if __name__ == "__main__":
 
         # build taxonomy for database
         file_location = os.path.join(custom_db_path, "taxonomy.tsv")
-        temp_df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
+        df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
         stdout.write("Database creation successful\n")
 
     if args.subparser_name == "collapse-taxonomy":
