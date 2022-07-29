@@ -194,6 +194,7 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #                 species_arr, logscore_arr = [], []
 #                 if query_name not in log_p_rgs:
 #                     species_arr.append(species_tid), logscore_arr.append(log_score)
+#                     log_p_rgs[query_name] = (species_arr, logscore_arr)
 #                 elif query_name in log_p_rgs:
 #                     if species_tid not in log_p_rgs[query_name][0]:
 #                        species_arr.append(species_tid), logscore_arr.append(log_score)
@@ -240,8 +241,8 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #     #min_p_thresh = math.log(0.01)
 #     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
 #     return log_p_rgs, unassigned_count, len(assigned_reads)
-
-
+#
+#
 # def expectation_maximization(log_p_rgs, freq):
 #     """
 #     One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
@@ -275,9 +276,8 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #                 valid_seq.append(s1_val)
 #                 log_p_rns.append(logprns_val)
 #
-#         np.array([valid_seq], dtype=np.int32), np.array([log_p_rns], dtype=np.float64)
-#
 #         if len(valid_seq) != 0:
+#             np.array([log_p_rns], dtype=np.float64)
 #             logc = -np.max(log_p_rns)  # calculate fixed multiplier, c
 #             prnsc = np.exp(log_p_rns + logc)  # calculates exp(log(L(r|s) * f(s) * c))
 #             prc = np.sum(prnsc)  # calculates sum of (L(r|s) * f(s) * c) for each read
