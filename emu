@@ -25,6 +25,10 @@ from Bio.SeqRecord import SeqRecord
 CIGAR_OPS = [1, 2, 4, 10]
 CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+RANKS = ["tax_id", "species", "genus", "family", "order", "class",
+                "phylum", "clade", "superkingdom", "subspecies",
+                "species subgroup", "species group"]
+
 
 
 def validate_input(path):
@@ -91,8 +95,7 @@ def output_unclassified(sam_path, seq_output_path, input_type):
                     name=alignment.query_name,
                 )
                 output_records.append(record)
-        SeqIO.write(output_records, f"{seq_output_path}.fa", "fasta")
-        # SeqIO.write(output_records, "{}.fa".format(seq_output_path), "fasta")
+        SeqIO.write(output_records, "{}.fa".format(seq_output_path), "fasta")
     elif input_type == "fastq":
         for alignment in sam_pysam.fetch():
             if alignment.reference_name is None:
@@ -103,8 +106,7 @@ def output_unclassified(sam_path, seq_output_path, input_type):
                     letter_annotations={"phred_quality": alignment.query_qualities}
                 )
                 output_records.append(record)
-        SeqIO.write(output_records, f"{seq_output_path}.fq", "fastq")
-        # SeqIO.write(output_records, "{}.fq".format(seq_output_path), "fastq")
+        SeqIO.write(output_records, "{}.fq".format(seq_output_path), "fastq")
 
 def get_cigar_op_log_probabilities(sam_path):
     """P(align_type) for each type in CIGAR_OPS by counting how often the corresponding
@@ -230,21 +232,17 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #             else:
 #                 unassigned_set.add(alignment.query_name)
 #
-#     for query in log_p_rgs:
-#         log_p_rgs[query] = (np.array(log_p_rgs[query][0], dtype=np.int32), np.array(log_p_rgs[query][1], dtype=np.float64))
-#
 #     assigned_reads = set(log_p_rgs.keys())
 #     unassigned_reads = unassigned_set - assigned_reads
 #     unassigned_count = len(unassigned_reads)
 #     stdout.write(f"Unassigned read count: {unassigned_count}\n")
-#     # stdout.write("Unassigned read count: {} \n".format(unassigned_count))
 #
 #     ## remove if p(r|s) < 0.01
 #     #min_p_thresh = math.log(0.01)
 #     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
 #     return log_p_rgs, unassigned_count, len(assigned_reads)
-
-
+#
+#
 # def expectation_maximization(log_p_rgs, freq):
 #     """
 #     One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
@@ -266,40 +264,35 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 #     logpr_sum, n_reads = 0, 0
 #     for r1 in log_p_rgs:
 #
-#         n_valid = sum([1 if i in freq and freq[i]!=0 else 0 for i in log_p_rgs[r1][0]])
-#         if n_valid == 0:
-#             continue
+#         valid_seq = []
+#         log_p_rns = []
 #
-#         valid_seq = np.zeros([n_valid])
-#         log_p_rns = np.zeros([n_valid])
-#         n_reads += 1
-#
-#         #check if sequences were found in frequency vector
-#         count = 0
-#         for s1 in range(np.shape(log_p_rgs[r1][0])[0]):
+#         # check if sequences were found in frequency vector
+#         for s1 in range(len(log_p_rgs[r1][0])):
 #             s1_val = log_p_rgs[r1][0][s1]
 #             if s1_val in freq and freq[s1_val] != 0:
-#                 logprns_val = log_p_rgs[r1][1][s1] + math.log(freq[s1_val])# calculates log(L(r|s))+log(f(s)) for each sequence
-#                 valid_seq[count] = s1_val
-#                 log_p_rns[count] = logprns_val
-#                 count += 1
+#                 logprns_val = log_p_rgs[r1][1][s1] + math.log(
+#                     freq[s1_val])  # calculates log(L(r|s))+log(f(s)) for each sequence
+#                 valid_seq.append(s1_val)
+#                 log_p_rns.append(logprns_val)
 #
-#         logc = -np.max(log_p_rns) #calculate fixed multiplier, c
-#         prnsc = np.exp(log_p_rns + logc) #calculates exp(log(L(r|s) * f(s) * c))
-#         prc = np.sum(prnsc) #calculates sum of (L(r|s) * f(s) * c) for each read
-#         logpr_sum += (math.log(prc) - logc) #add to sum of log likelihood
+#         if len(valid_seq) != 0:
+#             np.array([log_p_rns], dtype=np.float64)
+#             logc = -np.max(log_p_rns)  # calculate fixed multiplier, c
+#             prnsc = np.exp(log_p_rns + logc)  # calculates exp(log(L(r|s) * f(s) * c))
+#             prc = np.sum(prnsc)  # calculates sum of (L(r|s) * f(s) * c) for each read
+#             logpr_sum += (np.log(prc) - logc)  # add to sum of log likelihood
+#             n_reads += 1
 #
-#         #calculates P(s|r) for each sequence
-#         for s2 in range(n_valid):
-#             s2_val = valid_seq[s2]
-#             p_sgr_flat[(s2_val, r1)] = prnsc[s2] / prc
+#             # calculates P(s|r) for each sequence
+#             for s2 in range(len(valid_seq)):
+#                 s2_val = valid_seq[s2]
+#                 p_sgr_flat[(s2_val, r1)] = prnsc[s2] / prc
+#
 #     p_sgr = unflatten(p_sgr_flat)
 #
-#     #calculates updated frequency vector
-#     frq = {}
-#     for s3, r3 in p_sgr.items():
-#         frq[s3] = sum(r3.values()) / n_reads
-#
+#     # calculates updated frequency vector
+#     frq = {s3: sum(r3.values()) / n_reads for s3, r3 in p_sgr.items()}
 #     return frq, logpr_sum, p_sgr
 
 
@@ -329,7 +322,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                 log_score, query_name, species_tid = \
                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
                                          dict_longest_align, align_len)
-                # add to dictionary if the query_name and species_tid are not in, or if a small log_score is found
+                # update dictionary with highest probability score between the query and species_taxid
                 if (((query_name, species_tid) not in log_p_rgs or
                      log_p_rgs[(query_name, species_tid)] < log_score)):
                     log_p_rgs[(query_name, species_tid)] = log_score
@@ -347,7 +340,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                     log_score, query_name, species_tid = \
                         compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
                                              dict_longest_align, align_len)
-                    # add to dictionary if the query_name and species_tid are not in, or if a small log_score is found
+                    # update dictionary with highest probability score between the query and species_taxid
                     if (((query_name, species_tid) not in log_p_rgs or
                          log_p_rgs[(query_name, species_tid)] < log_score)):
                         log_p_rgs[(query_name, species_tid)] = log_score
@@ -358,7 +351,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     assigned_reads = set(unflatten(log_p_rgs).keys())
     unassigned_reads = unassigned_set - assigned_reads
     unassigned_count = len(unassigned_reads)
-    stdout.write(f"Unassigned read count: {unassigned_count}\n")
+    stdout.write("Unassigned read count: {}\n".format(unassigned_count))
 
     ## remove if p(r|s) < 0.01
     #min_p_thresh = math.log(0.01)
@@ -382,7 +375,7 @@ def expectation_maximization(log_p_rgs, freq):
                 total_log_likelihood (float): log likelihood updated f is accurate
                 p_sgr {int: {str: float}}: dictionary that caontains the calculations of P(s|r) for each sequence
     """
-    # log_p_rns = log(L(r|s))+log(f(s)) for each alignment
+    # calculate log(L(r|s))+log(f(s)) for each alignment
     log_p_rns = {}
     for (read, seq) in log_p_rgs:
         if seq in freq and freq[seq] != 0:
@@ -401,6 +394,7 @@ def expectation_maximization(log_p_rgs, freq):
             for seq, r_map in p_sgr.items()}, \
            sum(log_p_r.values()), p_sgr #frequency vector, total log likelihood, P(s|r)
 
+
 def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold):
     """Full expectation maximization algorithm for alignments in log_L_rgs dict. Calls the expectation_maximization
     function during each iteration of the algorithm. Stops iterations once the log likelihood is calculated to have increased
@@ -414,9 +408,8 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
                 float: min abundance threshold
     """
     n_db = len(db_ids)
-    n_reads = len(log_p_rgs)
-    stdout.write(f"Assigned read count: {n_reads}\n")
-    # stdout.write("Assigned read count: {}\n".format(n_reads))
+    n_reads = len(unflatten(log_p_rgs))
+    stdout.write("Assigned read count: {}\n".format(n_reads))
     # check if there are enough reads
     if n_reads == 0:
         raise ValueError("0 reads assigned")
@@ -435,8 +428,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         # check f vector sums to 1
         freq_sum = sum(freq.values())
         if not .9 <= freq_sum <= 1.1:
-            raise ValueError(f"f sums to {freq_sum}, rather than 1")
-            # raise ValueError("f sums to {}, rather than 1".format(freq_sum))
+            raise ValueError("f sums to {}, rather than 1".format(freq_sum))
 
         # confirm log likelihood increase
         log_likelihood_diff = updated_log_likelihood - total_log_likelihood
@@ -446,8 +438,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
 
         # exit loop if log likelihood increase less than threshold
         if log_likelihood_diff < lli_thresh:
-            stdout.write(f"Number of EM iterations: {counter}\n")
-            # stdout.write("Number of EM iterations: {}\n".format(counter))
+            stdout.write("Number of EM iterations: {}\n".format(counter))
             freq = {k: v for k, v in freq.items() if v >= freq_thresh} # remove tax id if less than the frequency threshold
             freq_full, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq)
             freq_set_thresh = None
@@ -461,21 +452,17 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
         counter += 1
 
-
 def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """For each given taxid, traverse the node_dict to build the lineage, and record the tax id
             for each taxonomic rank using the names_dict.
 
         tid(int): tax id to retrieve lineage dict
-        nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
+        nodes_dict{int:(int, str)}: dict of nodes.dmp with 'tax_id' as keys,
                                         tuple ('parent_taxid', 'rank') as values
         names_dict{int:str}: dict of names.dmp with 'tax_id' as keys,
                                         'name_txt' as values
-        return (str): a tuple containing the scientific name for each taxonomic rank for the given taxid
+        return (tuple): a tuple containing the scientific name for each taxonomic rank for the given taxid
     """
-    classes = ["tax_id", "species", "genus", "family", "order", "class",
-                    "phylum", "clade", "superkingdom", "subspecies",
-                    "species subgroup", "species group"]
     lineage_list = [""] * 12
     # traverse the nodes to create the lineage
     while names_dict[taxid] != "root":
@@ -484,8 +471,8 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
         if lineage_list[0] == "":
             lineage_list[0] = taxid
         # find the name for each taxonomic rank
-        elif tup[1] in classes:
-            idx = classes.index(tup[1])
+        elif tup[1] in RANKS:
+            idx = RANKS.index(tup[1])
             lineage_list[idx] = names_dict[taxid]
             taxid = tup[0]
         # if the taxonomic rank does not need to be recorded, then move on to the next node
@@ -516,8 +503,7 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, assigned_count,
     if counts:
         counts_series = pd.concat([(results_df["abundance"] * assigned_count)[:-1], pd.Series(unassigned_count)], ignore_index=True)
         results_df["estimated counts"] = counts_series
-    results_df.to_csv(f"{tsv_output_path}.tsv", sep='\t', index=False)
-    # results_df.to_csv("{}.tsv".format(tsv_output_path), sep='\t', index=False)
+    results_df.to_csv("{}.tsv".format(tsv_output_path), sep='\t', index=False)
     return results_df
 
 
@@ -533,17 +519,10 @@ def generate_alignments(in_file_list, out_basename, database):
     if filetype == '.sam':
         args.keep_files = True
         return input_file
-    sam_align_file = f"{out_basename}_emu_alignments.sam"
-    # sam_align_file = "{}_emu_alignments.sam".format(out_basename)
+    sam_align_file = "{}_emu_alignments.sam".format(out_basename)
     db_sequence_file = os.path.join(database, 'species_taxid.fasta')
 
-    subprocess.check_output(
-            f"minimap2 -ax {args.type} -t {args.threads} -N {args.N} -p .9 "
-            f"-K {args.K} {db_sequence_file} {input_file} -o {sam_align_file}",
-            shell=True)
-    # subprocess.check_output(
-    #         "minimap2 -ax {} -t {} -N {} -p .9 -K {} {} {} -o {}".format(args.type, args.threads, args.N, args.K, db_sequence_file, input_file, sam_align_file),
-    #         shell=True)
+    subprocess.check_output("minimap2 -ax {} -t {} -N {} -p .9 -K {} {} {} -o {}".format(args.type, args.threads, args.N, args.K, db_sequence_file, input_file, sam_align_file), shell=True)
 
     return sam_align_file
 
@@ -556,8 +535,7 @@ def output_read_assignments(p_sgr, tsv_output_path):
         returns(df): pandas df of read assignment distributions
     """
     dist_df = pd.DataFrame(p_sgr)
-    dist_df.to_csv(f"{tsv_output_path}.tsv", sep='\t')
-    # dist_df.to_csv("{}.tsv".format(tsv_output_path), sep='\t')
+    dist_df.to_csv("{}.tsv".format(tsv_output_path), sep='\t')
     return dist_df
 
 
@@ -592,10 +570,10 @@ def create_names_dict(names_path):
 
 
 def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
-    """Creates a text file where for each id in unique_tids a tax lineage is written to the file.
+    """Creates a tsv file where for each id in unique_tids a tax lineage is written to the file.
             each value of the tax lineage is seperated by a tab.
 
-        unique_tids(list): list of ints of each unique taxid in list of database sequences
+        unique_tids(set): set of ints of each unique taxid in list of database sequences
         nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
                                         tuple ('parent_taxid', 'rank') as values
         names_dict{int:str}: pandas dict of names.dmp with 'tax_id' as keys,
@@ -603,14 +581,11 @@ def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
     """
     f = open(filepath, 'w')
     # write the header to the file
-    header_order = ["tax_id", "species", "genus", "family", "order", "class",
-                    "phylum", "clade", "superkingdom", "subspecies",
-                    "species subgroup", "species group"]
-    dummy_str = '\t'.join(['%s',] * len(header_order)) + '\n'
-    f.write(dummy_str % tuple(header_order))
+    dummy_str = '\t'.join(['%s',] * len(RANKS)) + '\n'
+    f.write(dummy_str % tuple(RANKS))
     # write each lineage as a row in the file
-    for id in unique_tids:
-        lst = lineage_dict_from_tid(id, nodes_dict, names_dict)
+    for tid in unique_tids:
+        lst = lineage_dict_from_tid(tid, nodes_dict, names_dict)
         f.write(dummy_str % lst)
     f.close()
 
@@ -624,8 +599,7 @@ def get_species_tid(tid, nodes_dict):
         return(int): species taxid in lineage
     """
     if str(tid) not in nodes_dict.keys():
-        raise ValueError(f"Taxid:{tid} not found in nodes file")
-        # raise ValueError("Taxid:{} not found in nodes file".format(tid))
+        raise ValueError("Taxid:{} not found in nodes file".format(tid))
     while nodes_dict[str(tid)][1] not in TAXONOMY_RANKS:
         tid = nodes_dict[str(tid)][0]
     return tid
@@ -695,9 +669,7 @@ def create_reduced_fasta(fasta_dict, db_name):
     records, count = [], 1
     for seq, tid_dict in fasta_dict.items():
         for taxid, descriptions in tid_dict.items():
-            records += [SeqRecord(seq,
-                                  id=f"{taxid}:{db_name}:{count}", description=f"{descriptions}")]
-            # records += [SeqRecord(seq, id="{}:{}:{}".format(taxid, db_name, count), description="{}".format(descriptions))]
+            records += [SeqRecord(seq, id="{}:{}:{}".format(taxid, db_name, count), description="{}".format(descriptions))]
             count += 1
     return records
 
@@ -711,7 +683,7 @@ def collapse_rank(path, rank):
     """
     df_emu = pd.read_csv(path, sep='\t')
     if rank not in TAXONOMY_RANKS:
-        raise ValueError(f"Specified rank must be in list: {TAXONOMY_RANKS}")
+        raise ValueError("Specified rank must be in list: {}".format(TAXONOMY_RANKS))
     keep_ranks = TAXONOMY_RANKS[TAXONOMY_RANKS.index(rank):]
     for r in keep_ranks:
         if r not in df_emu.columns:
@@ -725,11 +697,9 @@ def collapse_rank(path, rank):
         df_emu_copy = df_emu_copy.replace({'-': 0}, regex=True)
         df_emu_copy = df_emu_copy.astype({'abundance': 'float'})
     df_emu_copy = df_emu_copy.groupby(keep_ranks, dropna=False).sum()
-    output_path = f"{os.path.splitext(path)[0]}-{rank}.tsv"
-    # output_path = "{}-{}.tsv".format(os.path.splitext(path)[0], rank)
+    output_path = "{}-{}.tsv".format(os.path.splitext(path)[0], rank)
     df_emu_copy.to_csv(output_path, sep='\t')
-    stdout.write(f"File generated: {output_path}\n")
-    # stdout.write("File generated: {}\n".format(output_path))
+    stdout.write("File generated: {}\n".format(output_path))
 
 
 if __name__ == "__main__":
@@ -840,26 +810,20 @@ if __name__ == "__main__":
         f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
-        freq_to_lineage_df(f_full, f"{out_file}_rel-abundance", df_taxonomy,
+        freq_to_lineage_df(f_full, "{}_rel-abundance".format(out_file), df_taxonomy,
                            counts_assigned, counts_unassigned, args.keep_counts)
-        # freq_to_lineage_df(f_full, "{}_rel-abundance".format(out_file), df_taxonomy,
-        #                    counts_assigned, counts_unassigned, args.keep_counts)
+
 
         # output read assignment distributions as a tsv
         if args.keep_read_assignments:
-            output_read_assignments(read_dist, f"{out_file}_read-assignment-distributions")
-            # output_read_assignments(read_dist, "{}_read-assignment-distributions".format(out_file))
+            output_read_assignments(read_dist, "{}_read-assignment-distributions".format(out_file))
 
         # convert and save frequency to a tsv
         if f_set_thresh:
             freq_to_lineage_df(
                 f_set_thresh,
-                f"{out_file}_rel-abundance-threshold-{args.min_abundance}",
+                "{}_rel-abundance-threshold-{}".format(out_file, args.min_abundance),
                 df_taxonomy, counts_assigned, counts_unassigned, args.keep_counts)
-            # freq_to_lineage_df(
-            #     f_set_thresh,
-            #     "{}_rel-abundance-threshold-{}".format(out_file, args.min_abundance),
-            #     df_taxonomy, counts_assigned, counts_unassigned, args.keep_counts)
 
         # gather input sequences that are unclassified according to minimap2
         if args.output_unclassified:
@@ -867,8 +831,7 @@ if __name__ == "__main__":
             INPUT_FILETYPE = "fasta"
             if ext in [".fastq", ".fq"]:
                 INPUT_FILETYPE = "fastq"
-            output_unclassified(sam_file, f"{out_file}_unclassified", INPUT_FILETYPE)
-            # output_unclassified(sam_file, "{}_unclassified".format(out_file), INPUT_FILETYPE)
+            output_unclassified(sam_file, "{}_unclassified".format(out_file), INPUT_FILETYPE)
 
         # clean up extra file
         if not args.keep_files:
@@ -881,8 +844,7 @@ if __name__ == "__main__":
         custom_db_path = os.path.join(emu_db_path, args.db_name)
         if not os.path.exists(custom_db_path):
             os.makedirs(custom_db_path)
-        stdout.write(f"Emu custom database generating at path: {custom_db_path} ...\n")
-        # stdout.write("Emu custom database generating at path: {} ...\n".format(custom_db_path))
+        stdout.write("Emu custom database generating at path: {} ...\n".format(custom_db_path))
 
         # convert input files to appropriate data structure
         dict_names = create_names_dict(args.names)
@@ -895,8 +857,8 @@ if __name__ == "__main__":
         SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
 
         # build taxonomy for database
-        file_location = os.path.join(custom_db_path, "taxonomy.txt")
-        temp_df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
+        file_location = os.path.join(custom_db_path, "taxonomy.tsv")
+        df_taxonomy = build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
         stdout.write("Database creation successful\n")
 
     if args.subparser_name == "collapse-taxonomy":
