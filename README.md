@@ -34,7 +34,7 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
 ```
 
-** Note Emu v3.0+ database requirements differ from previous versions. Check you are using the appropriate database for the version you are running.
+** Note Emu v3.0+ database requirements differ from previous versions. Check you are using the appropriate database for the version you are running. Both databases contain identical information: a combination of [rrnDB v5.6](https://rrndb-umms-med-umich-edu.translate.goog/?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=fr&_x_tr_pto=sc) and [NCBI 16S RefSeq](https://www.ncbi.nlm.nih.gov/refseq/targetedloci/16S_process/) from 17 September, 2020. Taxonomy is also from NCBI on the same date. The resulting database contains 49,301 sequences from 17,555 unique bacterial and archaeal species.
 
 ##### 2. Activate appropriate conda environment
 
@@ -64,6 +64,7 @@ conda config --add channels bioconda
 conda config --add channels conda-forge
 conda install emu
 ```
+Although not required, we recommend using minimap2 version >=2.22 to avoid memory leak [bug with highly repetitive sequences](https://github.com/lh3/minimap2/releases).
 
 ###### Option B: Create local Emu conda environment
 
