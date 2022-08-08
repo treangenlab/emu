@@ -25,9 +25,7 @@ from Bio.SeqRecord import SeqRecord
 CIGAR_OPS = [1, 2, 4, 10]
 CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
-RANKS = ["tax_id", "species", "genus", "family", "order", "class",
-                "phylum", "clade", "superkingdom", "subspecies",
-                "species subgroup", "species group"]
+RANKS_PRINTOUT = ['tax_id'] + TAXONOMY_RANKS + ['subspecies', 'species subgroup', 'species group']
 
 
 
@@ -131,7 +129,8 @@ def get_cigar_op_log_probabilities(sam_path):
             dict_longest_align[alignment.query_name] = align_len
         if not alignment.is_secondary and not alignment.is_supplementary \
                 and alignment.reference_name:
-            cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment))) # calculate cigar stats for alignment
+            cigar_stats_primary = list(map(add, cigar_stats_primary, get_align_stats(alignment)))
+            # calculate cigar stats for alignment
             if dict_longest_align[alignment.query_name] < align_len:
                 dict_longest_align[alignment.query_name] = align_len
     # check if any probabilities are 0, if so, remove
@@ -463,21 +462,16 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
                                         'name_txt' as values
         return (tuple): a tuple containing the scientific name for each taxonomic rank for the given taxid
     """
-    lineage_list = [""] * 12
+    # initialize list and record tax id
+    lineage_list = [taxid] + [""] * (len(RANKS_PRINTOUT) - 1)
     # traverse the nodes to create the lineage
     while names_dict[taxid] != "root":
         tup = nodes_dict[taxid]
-        # check if the original tax id has been recorded
-        if lineage_list[0] == "":
-            lineage_list[0] = taxid
         # find the name for each taxonomic rank
-        elif tup[1] in RANKS:
-            idx = RANKS.index(tup[1])
+        if tup[1] in RANKS_PRINTOUT: # check rank in printout list
+            idx = RANKS_PRINTOUT.index(tup[1])
             lineage_list[idx] = names_dict[taxid]
-            taxid = tup[0]
-        # if the taxonomic rank does not need to be recorded, then move on to the next node
-        else:
-            taxid = tup[0]
+        taxid = tup[0]
     return tuple(lineage_list)
 
 
@@ -581,8 +575,8 @@ def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
     """
     f = open(filepath, 'w')
     # write the header to the file
-    dummy_str = '\t'.join(['%s',] * len(RANKS)) + '\n'
-    f.write(dummy_str % tuple(RANKS))
+    dummy_str = '\t'.join(['%s',] * len(RANKS_PRINTOUT)) + '\n'
+    f.write(dummy_str % tuple(RANKS_PRINTOUT))
     # write each lineage as a row in the file
     for tid in unique_tids:
         lst = lineage_dict_from_tid(tid, nodes_dict, names_dict)
