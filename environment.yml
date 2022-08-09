@@ -11,6 +11,4 @@ dependencies:
   - numpy >=1.11
   - pandas >=1.1
   - flatten-dict
-  - minimap2
-  - pandarallel
-
+  - minimap2 >=2.22
