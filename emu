@@ -22,12 +22,12 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
+
 # static global variables
 CIGAR_OPS = [1, 2, 4, 10]
 CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 RANKS_PRINTOUT = ['tax_id'] + TAXONOMY_RANKS + ['subspecies', 'species subgroup', 'species group']
-
 
 
 def validate_input(path):
@@ -75,6 +75,7 @@ def get_align_len(alignment):
     """
     return sum(alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS_ALL)
 
+
 def output_unclassified(sam_path, seq_output_path, input_type):
     """ Gather list of input sequences that are deemed unclassified by minimap2,
         and output as seq_output_path
@@ -107,6 +108,7 @@ def output_unclassified(sam_path, seq_output_path, input_type):
                 output_records.append(record)
         SeqIO.write(output_records, "{}.fq".format(seq_output_path), "fastq")
 
+
 def get_cigar_op_log_probabilities(sam_path):
     """P(align_type) for each type in CIGAR_OPS by counting how often the corresponding
             operations occur in the primary alignments and by normalizing over the total
@@ -114,10 +116,10 @@ def get_cigar_op_log_probabilities(sam_path):
 
         sam_path(str): path to sam file of interest
         return: log probabilities (list(float)) for each cigar operation defined in CIGAR_OPS,
-                    where p > 0
-                zero_locs (list(int)): list of indices (int) where probability == 0
-                dict_longest_align (dict[str]:(int)): dict of max alignment length
-                    for each query read
+                where p > 0
+            zero_locs (list(int)): list of indices (int) where probability == 0
+            dict_longest_align (dict[str]:(int)): dict of max alignment length
+                for each query read
     """
     cigar_stats_primary = [0] * len(CIGAR_OPS)
     dict_longest_align = {}
@@ -174,8 +176,8 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
         dict_longest_align (dict[str]:(int)): dict of max alignment length for each query read
         zero_locs(list(int)): list of indices (int) where probability == 0
         return ({[str,int]:float}): dict[(query_name,ref_tax_id)]=log(L(query_name|ref_tax_id))
-                 int: unassigned read count
-                 int: assigned read count
+            int: unassigned read count
+            int: assigned read count
     """
     # calculate log(L(read|seq)) for all alignments
     log_p_rgs, unassigned_set = {}, set()
@@ -282,11 +284,11 @@ def expectation_maximization(log_p_rgs, freq):
             # calculates P(s|r) for each sequence
             for seq in enumerate(valid_seqs):
                 p_sgr_flat[(seq[1], read)] = prnsc[seq[0]] / prc
-
     p_sgr = unflatten(p_sgr_flat)
     # calculates updated frequency vector
     frq = {tax_id: sum(read_id.values()) / n_reads for tax_id, read_id in p_sgr.items()}
     return frq, logpr_sum, p_sgr
+
 
 def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold):
     """Full expectation maximization algorithm for alignments in log_L_rgs dict.
@@ -345,6 +347,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         #output current estimation
         #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
         counter += 1
+
 
 def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     """For each given taxid, traverse the node_dict to build the lineage, and record the tax id
@@ -482,6 +485,7 @@ def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
             lst = lineage_dict_from_tid(tid, nodes_dict, names_dict)
             file.write(dummy_str % lst)
 
+
 def get_species_tid(tid, nodes_dict):
     """ Get lowest taxid down to species-level in lineage for taxid [tid]
 
@@ -565,6 +569,7 @@ def create_reduced_fasta(fasta_dict, db_name):
                                   description="{}".format(descriptions))]
             count += 1
     return records
+
 
 def collapse_rank(path, rank):
     """ Stores a version of emu-output (path) collapsed at the specified taxonomic rank in same
@@ -673,11 +678,9 @@ if __name__ == "__main__":
         help='collapsed taxonomic rank')
     args = parser.parse_args()
 
-
     if args.subparser_name == "abundance":
         # check input file is fasta/q or sam alignment file
-        #validate_input(args.input_file[0])
-
+#        validate_input(args.input_file[0])
         # convert taxonomy files to dataframes
         if not args.db:
             raise ValueError("Database not specified. "
