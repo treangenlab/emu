@@ -466,26 +466,6 @@ def create_names_dict(names_path):
     return dict(zip(names_df['tax_id'], names_df['name_txt']))
 
 
-def build_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
-    """Creates a tsv file where for each id in unique_tids a tax lineage is written to the file.
-            each value of the tax lineage is seperated by a tab.
-
-        unique_tids(set): set of ints of each unique taxid in list of database sequences
-        nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
-                                        tuple ('parent_taxid', 'rank') as values
-        names_dict{int:str}: pandas dict of names.dmp with 'tax_id' as keys,
-                                        'name_txt' as values
-    """
-    with open(filepath, "w", encoding="utf8") as file:
-        # write the header to the file
-        dummy_str = '\t'.join(['%s',] * len(RANKS_PRINTOUT)) + '\n'
-        file.write(dummy_str % tuple(RANKS_PRINTOUT))
-        # write each lineage as a row in the file
-        for tid in unique_tids:
-            lst = lineage_dict_from_tid(tid, nodes_dict, names_dict)
-            file.write(dummy_str % lst)
-
-
 def get_species_tid(tid, nodes_dict):
     """ Get lowest taxid down to species-level in lineage for taxid [tid]
 
@@ -501,7 +481,7 @@ def get_species_tid(tid, nodes_dict):
     return tid
 
 
-def create_seq2tax_dict(seq2tax_path, nodes_dict):
+def create_species_seq2tax_dict(seq2tax_path, nodes_dict):
     """Convert seqid-taxid mapping in seq2tax_path to dict mapping seqid to species level taxid
 
         seq2tax_path(str): path to seqid-taxid mapping file
@@ -523,6 +503,21 @@ def create_seq2tax_dict(seq2tax_path, nodes_dict):
                 species_id_dict[tid] = species_tid
             seq2tax_dict[seqid] = species_tid
     return seq2tax_dict
+
+
+def create_direct_seq2tax_dict(seq2tax_path):
+    """Convert seqid-taxid mapping in seq2tax_path to dict mapping
+        SILVA seqid to corresponding taxid
+
+        seq2tax_path(str): path to seqid-taxid mapping file
+        returns {str:int}: dict[seqid] = species taxid
+    """
+    with open(seq2tax_path, encoding="utf8") as file:
+        seq2_taxid = {}
+        for line in file:
+            (seqid, taxid) = line.rstrip().split("\t")
+            seq2_taxid[seqid] = taxid
+    return seq2_taxid
 
 
 def create_unique_seq_dict(db_fasta_path, seq2tax_dict):
@@ -571,6 +566,46 @@ def create_reduced_fasta(fasta_dict, db_name):
     return records
 
 
+def build_ncbi_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
+    """Creates a tsv file where for each id in unique_tids a tax lineage is written to the file.
+            each value of the tax lineage is seperated by a tab.
+
+        unique_tids(set): set of ints of each unique taxid in list of database sequences
+        nodes_dict{int:[int, str]}: dict of nodes.dmp with 'tax_id' as keys,
+                                        tuple ('parent_taxid', 'rank') as values
+        names_dict{int:str}: pandas dict of names.dmp with 'tax_id' as keys,
+                                        'name_txt' as values
+    """
+    with open(filepath, "w", encoding="utf8") as file:
+        # write the header to the file
+        dummy_str = '\t'.join(['%s',] * len(RANKS_PRINTOUT)) + '\n'
+        file.write(dummy_str % tuple(RANKS_PRINTOUT))
+        # write each lineage as a row in the file
+        for tid in unique_tids:
+            lst = lineage_dict_from_tid(tid, nodes_dict, names_dict)
+            file.write(dummy_str % lst)
+
+
+def build_direct_taxonomy(tid_set, lineage_path, taxonomy_file):
+    """Create a tsv file that contains the taxid and the corresponding
+        lineage for the SILVA database
+
+        tid_set(set): set containing all taxids to add to the database
+        lineage_path(str): path to file containing the lineage in the first
+                column and the taxid in next column
+        taxonomy_file(str): path to output tsv file containing lineages
+    """
+    with open(taxonomy_file, 'w', encoding="utf8") as tax_output_file:
+        with open(lineage_path, encoding="utf8") as file:
+            first_line = file.readline()
+            tax_output_file.write("{}\t".format(RANKS_PRINTOUT[0]))
+            tax_output_file.write(first_line.split("\t", 1)[1])
+            for line in file:
+                tax_id = line.split("\t", 1)[0]
+                if tax_id in tid_set: #only add if taxid is in fasta
+                    tax_output_file.write(line)
+
+
 def collapse_rank(path, rank):
     """ Stores a version of emu-output (path) collapsed at the specified taxonomic rank in same
             folder as input.
@@ -601,7 +636,7 @@ def collapse_rank(path, rank):
 
 
 if __name__ == "__main__":
-    __version__ = "3.3.1"
+    __version__ = "3.4.0"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -648,25 +683,24 @@ if __name__ == "__main__":
         '--threads', type=int, default=3,
         help='threads utilized by minimap [3]')
 
-    build_db_parser = subparsers.add_parser("build-database", help="Build custom Emu database")
+    build_db_parser = subparsers.add_parser("build-database",
+                                            help="Build custom Emu database")
     build_db_parser.add_argument(
         'db_name', type=str,
         help='custom database name')
     build_db_parser.add_argument(
-        '--names', type=str,
-        help='path to names.dmp file')
-    build_db_parser.add_argument(
-        '--nodes', type=str,
-        help='path to nodes.dmp file')
-    build_db_parser.add_argument(
-        '--sequences', type=str,
+        '--sequences', type=str, required=True,
         help='path to fasta of database sequences')
     build_db_parser.add_argument(
-        '--seq2tax', type=str,
+        '--seq2tax', type=str, required=True,
         help='path to tsv mapping species tax id to fasta sequence headers')
-    build_db_parser.add_argument(
-        '--threads', type=int, default=3,
-        help='threads [3]')
+    taxonomy_group = build_db_parser.add_mutually_exclusive_group(required=True)
+    taxonomy_group.add_argument(
+        '--ncbi-taxonomy', type=str,
+        help='path to directory containing both a names.dmp and nodes.dmp file')
+    taxonomy_group.add_argument(
+        '--taxonomy-list', type=str,
+        help='path to .tsv file mapping full lineage to corresponding taxid')
 
     collapse_parser = subparsers.add_parser("collapse-taxonomy",
                                             help="Collapse emu output at specified taxonomic rank")
@@ -680,7 +714,7 @@ if __name__ == "__main__":
 
     if args.subparser_name == "abundance":
         # check input file is fasta/q or sam alignment file
-#        validate_input(args.input_file[0])
+        # validate_input(args.input_file[0])
         # convert taxonomy files to dataframes
         if not args.db:
             raise ValueError("Database not specified. "
@@ -734,7 +768,8 @@ if __name__ == "__main__":
             if os.path.exists(SAM_FILE):
                 os.remove(SAM_FILE)
 
-    # create a custom database
+
+    # create a custom database with ncbi taxonomy
     if args.subparser_name == "build-database":
         emu_db_path = os.getcwd()
         custom_db_path = os.path.join(emu_db_path, args.db_name)
@@ -742,20 +777,29 @@ if __name__ == "__main__":
             os.makedirs(custom_db_path)
         stdout.write("Emu custom database generating at path: {} ...\n".format(custom_db_path))
 
-        # convert input files to appropriate data structure
-        dict_names = create_names_dict(args.names)
-        dict_nodes = create_nodes_dict(args.nodes)
-        seq2tax = create_seq2tax_dict(args.seq2tax, dict_nodes)
-        db_unique_ids = set(seq2tax.values())
+        # set up seq2tax dict for either NCBI or direct taxonomy
+        if args.ncbi_taxonomy:
+            dict_names = create_names_dict(os.path.join(args.ncbi_taxonomy, 'names.dmp'))
+            dict_nodes = create_nodes_dict(os.path.join(args.ncbi_taxonomy, 'nodes.dmp'))
+            seq2tax = create_species_seq2tax_dict(args.seq2tax, dict_nodes)
+        else:
+            seq2tax = create_direct_seq2tax_dict(args.seq2tax)
 
+        # print fasta in desired Emu database format
+        db_unique_ids = set(seq2tax.values())
         dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
         fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
         SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
 
         # build taxonomy for database
-        file_location = os.path.join(custom_db_path, "taxonomy.tsv")
-        build_taxonomy(db_unique_ids, dict_nodes, dict_names, file_location)
+        output_taxonomy_location = os.path.join(custom_db_path, "taxonomy.tsv")
+        if args.ncbi_taxonomy:
+            build_ncbi_taxonomy(db_unique_ids, dict_nodes, dict_names, output_taxonomy_location)
+        else:
+            build_direct_taxonomy(db_unique_ids, args.taxonomy_list, output_taxonomy_location)
         stdout.write("Database creation successful\n")
 
+
+    # collapse Emu results at desired taxonomic rank
     if args.subparser_name == "collapse-taxonomy":
         collapse_rank(args.input_path, args.rank)

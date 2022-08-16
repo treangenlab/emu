@@ -110,21 +110,34 @@ An emu database consists of 2 files:
 |taxonomy.tsv| tab separated datasheet of database taxonomy lineages containing at columns: 'tax_id' and any taxonomic ranks (i.e. species, genus, etc) |
 |species_taxid.fasta| database sequences where each sequence header starts with the respective species-level tax id (or lowest level above species-level if missing) preceeding a colon [&lt;species_taxid>:&lt;remainder of header>]|
 
-To build a custom database with corresponding NCBI taxonomy, 4 files are needed.
+A custom database can be built from either NCBI taxonomy (names.dmp and nodes.dmp files) or a .tsv file containing full taxonomy lineages.
+If the database if build from NCBI taxonomy, the database fasta sequences will be classified at the species level (or the lowest taxonomic rank
+provided if already classified above the species level). If taxonomy is provided as a list of lineage, database fasta sequences
+will be classified at the rank of the tax_id provided in the seq2taxid.map file. Therefore, when using direct taxonomy to build
+your custom database, we recommend providing a seq2taxid.map at the species-level or higher.
 
-- names.dmp: names file from NCBI taxonomy dump
-- nodes.dmp: nodes file from NCBI taxonomy dump
-- database.fasta: nucleotide sequences
-- seq2taxid.map: headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) tax id.
+The following files are required to build a custom database:
+| Command	| file(s)	| Description	|
+| :-------  | :----- | :-------- | 
+|--sequences	| database.fasta	| nucleotide sequences	|
+|--seq2tax	| database.fasta	| headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) corresponding tax id	|
+| *either taxonomy option:*| 
+|--ncbi-taxonomy	| names.dmp & nodes.dmp	| directory containing both names.dmp and nodes.dmp files in NCBI taxonomy format and named accordingly	|
+|--taxonomy-list	| input taxonomy.tsv	| a .tsv file containing complete taxonomic lineages. The first column MUST be the taxonomy ids. Remaining columns can be in any format, then Emu abundance output will match this format|
+
 
 ```bash
-emu build-database <db_name> --names <names.dmp> --nodes <nodes.dmp> --sequences <database.fasta> --seq2tax <seq2taxid.map>
+emu build-database <db_name> --sequences <database.fasta> --seq2tax <seq2taxid.map> --ncbi-taxonomy <dir-to-names/nodes.dmp>
+OR
+emu build-database <db_name> --sequences <database.fasta> --seq2tax <seq2taxid.map> --taxonomy-list <taxonomy.tsv>
 ```
 
 Example:
 
 ```bash
-emu build-database zymo_assembled_db --names ./example_customdb/ex_names.dmp --nodes ./example_customdb/ex_nodes.dmp --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map
+emu build-database zymo_assembled_db --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map --ncbi-taxonomy ./example_customdb/
+OR
+emu build-database zymo_assembled_db --sequences ./example_customdb/ex.fasta --seq2tax ./example_customdb/ex_seq2tax.map --taxonomy-list ./example_customdb/ex-taxonomy.tsv
 ```
 
 ```bash
@@ -138,15 +151,22 @@ export EMU_DATABASE_DIR=./zymo_assembled_db
 emu abundance ./example_customdb/ex.fasta
 ```
 
-Note: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where &lt;genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
+Note for NCBI-taxonomy created database: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where &lt;genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
 
 #### Alternative Database
 
-RDP v11.5 (https://rdp.cme.msu.edu/) has been pre-built for Emu v3.0+ and can be downloaded accordingly:
+[RDP v11.5](https://rdp.cme.msu.edu/) with NCBI taxonomy has been pre-built for Emu v3.0+ and can be downloaded accordingly. 
 
 ```bash
 export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/rdp_database/
+```
+
+
+[SILVA v138.1](https://www.arb-silva.de/) has been pre-built for Emu v3.0+ from the [DADA2 SILVA species-level database](https://zenodo.org/record/4587955#.YvqmSezMLOQ).
+```bash
+export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.0/emu-v3.4.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.0/silva_database/
 ```
 
 ### Collapse Taxonomy
@@ -159,12 +179,29 @@ emu collapse-taxonomy <file_path> <rank>
 
 ### System Requirements
 
-All software depencies are listed in environment.yml. Emu v3.0.0 has been tested on Python v3.7 and used to generate results in manuscript.
+All software dependencies are listed in environment.yml. Emu v3.0.0 has been tested on Python v3.7 and used to generate results in manuscript.
 
 ### Emu Manuscript
 
 Publication: [Kristen D. Curry et al., “Emu: Species-Level Microbial Community Profiling of Full-Length 16S RRNA Oxford Nanopore Sequencing Data,” Nature Methods, June 30, 2022, 1–9, https://doi.org/10.1038/s41592-022-01520-4.](https://www.nature.com/articles/s41592-022-01520-4)
 Repository for reproduction of results in manuscript: [Emu-benchmark](https://gitlab.com/treangenlab/emu-benchmark)
 
+### Database Citations
+Please use citations below if any of the pre-contructed databases are utilized:
+
+##### Emu default database
+- Stoddard, S. F., Smith, B. J., Hein, R., Roller, B. R. & Schmidt, T. M. (2015) rrnDB: improved tools for interpreting rRNA gene abundance in bacteria and archaea and a new foundation for future development. Nucl. Acids Res. 43, D593–D598.
+- O’Leary, N. A. et al. (2016) Reference sequence (RefSeq) database at NCBI: current status, taxonomic expansion, and functional annotation. Nucl. Acids Res. 44, D733–D745.
+- Schoch, C. L. et al. (2020) NCBI Taxonomy: a comprehensive update on curation, resources and tools. Database (Oxford) 2020.
+
+
+##### RDP
+- Cole, J. R. et al. (2014) Ribosomal Database Project: data and tools for high throughput rRNA analysis. Nucl. Acids Res. 42, D633–D642.
+- Schoch, C. L. et al. (2020) NCBI Taxonomy: a comprehensive update on curation, resources and tools. Database (Oxford) 2020.
+
+##### SILVA
+- Quast C, Pruesse E, Yilmaz P, Gerken J, Schweer T, Yarza P, Peplies J, Glöckner FO (2013) The SILVA ribosomal RNA gene database project: improved data processing and web-based tools. Nucl. Acids Res. 41 (D1): D590-D596.
+- Yilmaz P, Parfrey LW, Yarza P, Gerken J, Pruesse E, Quast C, Schweer T, Peplies J, Ludwig W, Glöckner FO (2014) The SILVA and "All-species Living Tree Project (LTP)" taxonomic frameworks. Nucl. Acids Res. 42:D643-D648
+- Callahan BJ, McMurdie PJ, Rosen MJ, Han AW, Johnson AJA, Holmes SP. 2016. DADA2: High-resolution sample inference from Illumina amplicon data. Nat Methods 13:581–583. doi:10.1038/nmeth.3869
 
 
