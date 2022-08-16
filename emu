@@ -506,12 +506,13 @@ def create_species_seq2tax_dict(seq2tax_path, nodes_dict):
 
 
 def create_direct_seq2tax_dict(seq2tax_path):
-    """Convert seqid-taxid mapping in seq2tax_path to dict mapping SILVA seqid to corresponding taxid
+    """Convert seqid-taxid mapping in seq2tax_path to dict mapping
+        SILVA seqid to corresponding taxid
 
         seq2tax_path(str): path to seqid-taxid mapping file
         returns {str:int}: dict[seqid] = species taxid
     """
-    with open(seq2tax_path) as file:
+    with open(seq2tax_path, encoding="utf8") as file:
         seq2_taxid = {}
         for line in file:
             (seqid, taxid) = line.rstrip().split("\t")
@@ -586,22 +587,23 @@ def build_ncbi_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
 
 
 def build_direct_taxonomy(tid_set, lineage_path, taxonomy_file):
-    """Create a tsv file that contains the taxid and the corresponding lineage for the SILVA database
+    """Create a tsv file that contains the taxid and the corresponding
+        lineage for the SILVA database
 
         tid_set(set): set containing all taxids to add to the database
-        lineage_path(str): path to file containing the lineage in the first column and the taxid in next column
-        taxonomy_file(str): path to tsv file containing lineages
+        lineage_path(str): path to file containing the lineage in the first
+                column and the taxid in next column
+        taxonomy_file(str): path to output tsv file containing lineages
     """
-    f = open(taxonomy_file, 'w')
-    with open(lineage_path) as file:
-        first_line = file.readline()
-        f.write("{}\t".format(RANKS_PRINTOUT[0]))
-        f.write(first_line.split("\t", 1)[1])
-        for line in file:
-            id = line.split("\t", 1)[0]
-            if id in tid_set: #only add if taxid is in fasta
-                f.write(line)
-    f.close()
+    with open(taxonomy_file, 'w', encoding="utf8") as tax_output_file:
+        with open(lineage_path, encoding="utf8") as file:
+            first_line = file.readline()
+            tax_output_file.write("{}\t".format(RANKS_PRINTOUT[0]))
+            tax_output_file.write(first_line.split("\t", 1)[1])
+            for line in file:
+                tax_id = line.split("\t", 1)[0]
+                if tax_id in tid_set: #only add if taxid is in fasta
+                    tax_output_file.write(line)
 
 
 def collapse_rank(path, rank):
