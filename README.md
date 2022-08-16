@@ -116,18 +116,18 @@ provided if already classified above the species level). If taxonomy is provided
 will be classified at the rank of the tax_id provided in the seq2taxid.map file. Therefore, when using direct taxonomy to build
 your custom database, we recommend providing a seq2taxid.map at the species-level or higher.
 
-The folloing files are required to build a custom database:
+The following files are required to build a custom database:
 | Command	| file(s)	| Description	|
 | :-------  | :----- | :-------- | 
 |--sequences	| database.fasta	| nucleotide sequences	|
 |--seq2tax	| database.fasta	| headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) corresponding tax id	|
-| taxonomy as either:| 
+| *either taxonomy option:*| 
 |--ncbi-taxonomy	| names.dmp & nodes.dmp	| directory containing both names.dmp and nodes.dmp files in NCBI taxonomy format and named accordingly	|
 |--taxonomy-list	| input taxonomy.tsv	| a .tsv file containing complete taxonomic lineages. The first column MUST be the taxonomy ids. Remaining columns can be in any format, then Emu abundance output will match this format|
 
 
 ```bash
-emu build-database <db_name> --sequences <database.fasta> --seq2tax <seq2taxid.map> --ncbi-taxonomy <dir to names/nodes.dmp>
+emu build-database <db_name> --sequences <database.fasta> --seq2tax <seq2taxid.map> --ncbi-taxonomy <dir-to-names/nodes.dmp>
 OR
 emu build-database <db_name> --sequences <database.fasta> --seq2tax <seq2taxid.map> --taxonomy-list <taxonomy.tsv>
 ```
