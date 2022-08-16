@@ -153,7 +153,7 @@ emu abundance ./example_customdb/ex.fasta
 
 Note for NCBI-taxonomy created database: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where &lt;genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
 
-#### Alternative Database
+#### Alternative Databases
 
 [RDP v11.5](https://rdp.cme.msu.edu/) with NCBI taxonomy has been pre-built for Emu v3.0+ and can be downloaded accordingly. 
 
@@ -166,7 +166,7 @@ wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz 
 [SILVA v138.1](https://www.arb-silva.de/) has been pre-built for Emu v3.0+ from the [DADA2 SILVA species-level database](https://zenodo.org/record/4587955#.YvqmSezMLOQ).
 ```bash
 export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.0/emu-v3.4.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.0/silva_database/
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.1/emu-v3.4.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.1/silva_database/
 ```
 
 ### Collapse Taxonomy
@@ -175,6 +175,17 @@ The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to g
 
 ```bash
 emu collapse-taxonomy <file_path> <rank>
+```
+
+### Combine Outputs
+
+The combine-outputs function can be used to create a single table containing all Emu output relative abundances in a single directory.
+Note this function will select all the .tsv files in the provided directory that contain 'rel-abundance' in the filename.
+Combined table will only include the specified rank as a taxonomy column and therefore will only include Emu output
+relative abundance tables that contain the specified rank.
+
+```bash
+emu combine-outputs <directory_path> <rank>
 ```
 
 ### System Requirements
