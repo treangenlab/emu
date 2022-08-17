@@ -659,7 +659,7 @@ def combine_outputs(dir_path, rank):
     return df_combined
 
 if __name__ == "__main__":
-    __version__ = "3.4.1"
+    __version__ = "3.4.2"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')

@@ -169,6 +169,20 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.1/emu-v3.4.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.1/silva_database/
 ```
 
+[UNITE general fasta v8.3 fungi](https://plutof.ut.ee/#/doi/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. 
+This database has not yet been tested or validated with Emu.
+```bash
+export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-fungi_database/
+```
+
+[UNITE general fasta v8.3 all eukaryotes](https://plutof.ut.ee/#/doi/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. 
+This database has not yet been tested or validated with Emu.
+```bash
+export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-all_database/
+```
+
 ### Collapse Taxonomy
 
 The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
@@ -216,4 +230,5 @@ Please use citations below if any of the pre-contructed databases are utilized:
 - Yilmaz P, Parfrey LW, Yarza P, Gerken J, Pruesse E, Quast C, Schweer T, Peplies J, Ludwig W, Glöckner FO (2014) The SILVA and "All-species Living Tree Project (LTP)" taxonomic frameworks. Nucl. Acids Res. 42:D643-D648
 - Callahan BJ, McMurdie PJ, Rosen MJ, Han AW, Johnson AJA, Holmes SP. 2016. DADA2: High-resolution sample inference from Illumina amplicon data. Nat Methods 13:581–583. doi:10.1038/nmeth.3869
 
-
+##### UNITE
+- Nilsson, R. H. et al. (2019) The UNITE database for molecular identification of fungi: handling dark taxa and parallel taxonomic classifications. Nucleic Acids Res 47, D259–D264.
