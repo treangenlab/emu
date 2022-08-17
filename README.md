@@ -169,6 +169,8 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.1/emu-v3.4.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.1/silva_database/
 ```
 
+Files used to construct these databases are stored on [OSF](https://osf.io/56uf7/)
+
 ### Collapse Taxonomy
 
 The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
