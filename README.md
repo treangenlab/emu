@@ -195,8 +195,9 @@ emu collapse-taxonomy <file_path> <rank>
 
 The combine-outputs function can be used to create a single table containing all Emu output relative abundances in a single directory.
 Note this function will select all the .tsv files in the provided directory that contain 'rel-abundance' in the filename.
-Combined table will only include the specified rank as a taxonomy column and therefore will only include Emu output
-relative abundances that contain the specified rank. Combined table will be created in the provided directory path with the file name:
+Combined table will only include all ranks above the specified rank according to this list:
+[tax_id, species, genus, family, order, class, phylum, clade, superkingdom]. Specified rank must
+be in this list and in each of the included Emu outputs. Combined table will be created in the provided directory path with the file name:
 emu-combined-&lt;rank>.tsv.
 
 ```bash

@@ -28,6 +28,7 @@ CIGAR_OPS = [1, 2, 4, 10]
 CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 RANKS_PRINTOUT = ['tax_id'] + TAXONOMY_RANKS + ['subspecies', 'species subgroup', 'species group']
+RANKS_ORDER = ['tax_id'] + TAXONOMY_RANKS
 
 
 def validate_input(path):
@@ -642,7 +643,8 @@ def combine_outputs(dir_path, rank):
         rank(str): taxonomic rank to combine files on
         return(df): Pandas df of the combined relative abundance files
     """
-    df_combined = pd.DataFrame(columns=[rank]).set_index(rank)
+    keep_ranks_all = RANKS_ORDER[RANKS_ORDER.index(rank):]
+    df_combined = pd.DataFrame(columns=keep_ranks_all)
     for file in os.listdir(dir_path):
         file_extension = pathlib.Path(file).suffix
         if file_extension == '.tsv' and 'rel-abundance' in file:
@@ -650,11 +652,11 @@ def combine_outputs(dir_path, rank):
             name = name.replace('_rel-abundance', '')
             df = pd.read_csv(os.path.join(dir_path, file), sep='\t')
             if rank in df.columns:
-                df_rank = df[[rank, 'abundance']].rename(columns={'abundance': name}).set_index(rank)
-                df_rank = df_rank.replace('-', 0).astype('float').groupby(rank).sum()
-                df_combined = pd.merge(df_combined, df_rank, how='outer', on=[rank])
+                keep_ranks = [value for value in keep_ranks_all if value in set(df.columns)]
+                df_rank = df[keep_ranks + ['abundance']].rename(columns={'abundance': name})
+                df_combined = pd.merge(df_combined, df_rank, how='outer')
 
-    df_combined = df_combined.sort_index()
+    df_combined = df_combined.set_index(rank).sort_index()
     df_combined.to_csv(os.path.join(dir_path, "emu-combined-{}.tsv".format(rank)), sep='\t')
     return df_combined
 
