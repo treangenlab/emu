@@ -204,6 +204,12 @@ emu-combined-&lt;rank>.tsv.
 emu combine-outputs <directory_path> <rank>
 ```
 
+Optional additional parameters:
+| Command	| Description	|
+| :-------  | :-------- | 
+|--split-tables	| output 2 tables: (1) abundances only at specified rank and (2) taxonomic lineages down to specified rank	|
+|--counts-table	| output counts rather than relative abundance percentage|
+
 ### System Requirements
 
 All software dependencies are listed in environment.yml. Emu v3.0.0 has been tested on Python v3.7 and used to generate results in manuscript.

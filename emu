@@ -635,7 +635,7 @@ def collapse_rank(path, rank):
     df_emu_copy.to_csv(output_path, sep='\t')
     stdout.write("File generated: {}\n".format(output_path))
 
-def combine_outputs(dir_path, rank):
+def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     """ Combines multiple Emu output relative abundance tables into a single table.
         Inlcudes all .tsv files with 'rel-abundance' in the filename in the provided dir_path.
 
@@ -644,21 +644,39 @@ def combine_outputs(dir_path, rank):
         return(df): Pandas df of the combined relative abundance files
     """
     keep_ranks_all = RANKS_ORDER[RANKS_ORDER.index(rank):]
-    df_combined = pd.DataFrame(columns=keep_ranks_all)
+    df_combined_full = pd.DataFrame(columns=keep_ranks_all)
+    df_combined_rank = pd.DataFrame(columns=[rank])
+    df_combined_tax = pd.DataFrame(columns=keep_ranks_all)
+    metric = 'abundance'
+    if count_table:
+        metric = 'estimated counts'
     for file in os.listdir(dir_path):
         file_extension = pathlib.Path(file).suffix
         if file_extension == '.tsv' and 'rel-abundance' in file:
             name = pathlib.Path(file).stem
             name = name.replace('_rel-abundance', '')
-            df = pd.read_csv(os.path.join(dir_path, file), sep='\t')
-            if rank in df.columns:
-                keep_ranks = [value for value in keep_ranks_all if value in set(df.columns)]
-                df_rank = df[keep_ranks + ['abundance']].rename(columns={'abundance': name})
-                df_combined = pd.merge(df_combined, df_rank, how='outer')
-
-    df_combined = df_combined.set_index(rank).sort_index()
-    df_combined.to_csv(os.path.join(dir_path, "emu-combined-{}.tsv".format(rank)), sep='\t')
-    return df_combined
+            df_sample = pd.read_csv(os.path.join(dir_path, file), sep='\t')
+            if rank in df_sample.columns:
+                keep_ranks = [value for value in keep_ranks_all if value in set(df_sample.columns)]
+                df_sample_reduced = df_sample[keep_ranks + [metric]].rename(columns={metric: name})
+                df_combined_full = pd.merge(df_combined_full, df_sample_reduced, how='outer')
+                df_combined_rank = pd.merge(df_combined_rank, df_sample_reduced[[rank, name]], on=[rank], how='outer')
+                df_combined_tax = pd.merge(df_combined_tax, df_sample_reduced.drop(columns=[name]), how='outer')
+    if split_files:
+        abundance_out_path = os.path.join(dir_path, "emu-combined-abundance-{}.tsv".format(rank))
+        tax_out_path = os.path.join(dir_path, "emu-combined-taxonomy-{}.tsv".format(rank))
+        df_combined_rank = df_combined_rank.set_index(rank).sort_index()
+        df_combined_tax = df_combined_tax.set_index(rank).sort_index()
+        df_combined_rank.to_csv(abundance_out_path, sep='\t')
+        df_combined_tax.to_csv(tax_out_path, sep='\t')
+        stdout.write("Combined abundance table generated: {}\n".format(abundance_out_path))
+        stdout.write("Combined taxonomy table generated: {}\n".format(tax_out_path))
+    else:
+        df_combined_full = df_combined_full.set_index(rank).sort_index()
+        out_path = os.path.join(dir_path, "emu-combined-{}.tsv".format(rank))
+        df_combined_full.to_csv(out_path, sep='\t')
+        stdout.write("Combined table generated: {}\n".format(out_path))
+    return df_combined_full
 
 if __name__ == "__main__":
     __version__ = "3.4.2"
@@ -744,6 +762,12 @@ if __name__ == "__main__":
     combine_parser.add_argument(
         'rank', type=str,
         help='taxonomic rank to include in combined table')
+    combine_parser.add_argument(
+        '--split-tables', action="store_true",
+        help='two output tables:abundances and taxonomy lineages')
+    combine_parser.add_argument(
+        '--counts-table', action="store_true",
+        help='counts rather than abundances in output table')
     args = parser.parse_args()
 
     if args.subparser_name == "abundance":
@@ -840,4 +864,4 @@ if __name__ == "__main__":
 
     # combine Emu results at desired taxonomic rank
     if args.subparser_name == "combine-outputs":
-        combine_outputs(args.dir_path, args.rank)
+        combine_outputs(args.dir_path, args.rank, args.split_tables, args.counts_table)
