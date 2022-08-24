@@ -185,7 +185,9 @@ wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz 
 
 ### Collapse Taxonomy
 
-The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed 
+at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. 
+Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 ```bash
 emu collapse-taxonomy <file_path> <rank>
@@ -196,9 +198,9 @@ emu collapse-taxonomy <file_path> <rank>
 The combine-outputs function can be used to create a single table containing all Emu output relative abundances in a single directory.
 Note this function will select all the .tsv files in the provided directory that contain 'rel-abundance' in the filename.
 Combined table will only include all ranks above the specified rank according to this list:
-[tax_id, species, genus, family, order, class, phylum, clade, superkingdom]. Specified rank must
+[tax_id, species, genus, family, order, class, phylum, superkingdom]. Specified rank must
 be in this list and in each of the included Emu outputs. Combined table will be created in the provided directory path with the file name:
-emu-combined-&lt;rank>.tsv.
+emu-combined-&lt;rank>.tsv. In order to include tax_id in your output, specific &lt;rank> as "tax_id".
 
 ```bash
 emu combine-outputs <directory_path> <rank>
@@ -208,7 +210,7 @@ Optional additional parameters:
 | Command	| Description	|
 | :-------  | :-------- | 
 |--split-tables	| output 2 tables: (1) abundances only at specified rank and (2) taxonomic lineages down to specified rank	|
-|--counts-table	| output counts rather than relative abundance percentage|
+|--counts-table	| output counts rather than relative abundance percentage in combined table  |
 
 ### System Requirements
 
