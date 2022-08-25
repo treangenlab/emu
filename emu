@@ -771,7 +771,7 @@ if __name__ == "__main__":
         '--split-tables', action="store_true",
         help='two output tables:abundances and taxonomy lineages')
     combine_parser.add_argument(
-        '--counts-table', action="store_true",
+        '--counts', action="store_true",
         help='counts rather than abundances in output table')
     args = parser.parse_args()
 
@@ -869,4 +869,4 @@ if __name__ == "__main__":
 
     # combine Emu results at desired taxonomic rank
     if args.subparser_name == "combine-outputs":
-        combine_outputs(args.dir_path, args.rank, args.split_tables, args.counts_table)
+        combine_outputs(args.dir_path, args.rank, args.split_tables, args.counts)

@@ -210,7 +210,7 @@ Optional additional parameters:
 | Command	| Description	|
 | :-------  | :-------- | 
 |--split-tables	| output 2 tables: (1) abundances only at specified rank and (2) taxonomic lineages down to specified rank	|
-|--counts-table	| output counts rather than relative abundance percentage in combined table  |
+|--counts	| output estimated counts rather than relative abundance percentage in combined table. Only includes Emu relative abundance outputs that already have 'estimated counts'  |
 
 ### System Requirements
 
