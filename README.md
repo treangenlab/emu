@@ -169,11 +169,27 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.1/emu-v3.4.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.1/silva_database/
 ```
 
+[UNITE general fasta v8.3 fungi](https://plutof.ut.ee/#/doi/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. 
+This database has not yet been tested or validated with Emu.
+```bash
+export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-fungi_database/
+```
+
+[UNITE general fasta v8.3 all eukaryotes](https://plutof.ut.ee/#/doi/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. 
+This database has not yet been tested or validated with Emu.
+```bash
+export EMU_DATABASE_DIR=<path_to_database>
+wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-all_database/
+```
+
 Files used to construct these databases are stored on [OSF](https://osf.io/56uf7/)
 
 ### Collapse Taxonomy
 
-The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
+The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed 
+at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. 
+Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 ```bash
 emu collapse-taxonomy <file_path> <rank>
@@ -183,13 +199,20 @@ emu collapse-taxonomy <file_path> <rank>
 
 The combine-outputs function can be used to create a single table containing all Emu output relative abundances in a single directory.
 Note this function will select all the .tsv files in the provided directory that contain 'rel-abundance' in the filename.
-Combined table will only include the specified rank as a taxonomy column and therefore will only include Emu output
-relative abundances that contain the specified rank. Combined table will be created in the provided directory path with the file name:
-emu-combined-&lt;rank>.tsv.
+Combined table will only include all ranks above the specified rank according to this list:
+[tax_id, species, genus, family, order, class, phylum, superkingdom]. Specified rank must
+be in this list and in each of the included Emu outputs. Combined table will be created in the provided directory path with the file name:
+emu-combined-&lt;rank>.tsv. In order to include tax_id in your output, specific &lt;rank> as "tax_id".
 
 ```bash
 emu combine-outputs <directory_path> <rank>
 ```
+
+Optional additional parameters:
+| Command	| Description	|
+| :-------  | :-------- | 
+|--split-tables	| output 2 tables: (1) abundances only at specified rank and (2) taxonomic lineages down to specified rank	|
+|--counts	| output estimated counts rather than relative abundance percentage in combined table. Only includes Emu relative abundance outputs that already have 'estimated counts'  |
 
 ### System Requirements
 
@@ -218,4 +241,5 @@ Please use citations below if any of the pre-contructed databases are utilized:
 - Yilmaz P, Parfrey LW, Yarza P, Gerken J, Pruesse E, Quast C, Schweer T, Peplies J, Ludwig W, Glöckner FO (2014) The SILVA and "All-species Living Tree Project (LTP)" taxonomic frameworks. Nucl. Acids Res. 42:D643-D648
 - Callahan BJ, McMurdie PJ, Rosen MJ, Han AW, Johnson AJA, Holmes SP. 2016. DADA2: High-resolution sample inference from Illumina amplicon data. Nat Methods 13:581–583. doi:10.1038/nmeth.3869
 
-
+##### UNITE
+- Nilsson, R. H. et al. (2019) The UNITE database for molecular identification of fungi: handling dark taxa and parallel taxonomic classifications. Nucleic Acids Res 47, D259–D264.
