@@ -183,6 +183,8 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-all_database/
 ```
 
+Files used to construct these databases are stored on [OSF](https://osf.io/56uf7/)
+
 ### Collapse Taxonomy
 
 The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed 
