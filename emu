@@ -446,8 +446,10 @@ def create_nodes_dict(nodes_path):
 
     """
     node_headers = ['tax_id', 'parent_tax_id', 'rank']
-    nodes_df = pd.read_csv(nodes_path, sep='\t', header=None, dtype=str)[[0, 2, 4]]
+    nodes_df = pd.read_csv(nodes_path, sep='|', header=None, dtype=str)[[0, 1, 2]]
     nodes_df.columns = node_headers
+    for col in nodes_df.columns:
+        nodes_df[col] = nodes_df[col].str.strip()
     return dict(zip(nodes_df['tax_id'], tuple(zip(nodes_df['parent_tax_id'], nodes_df['rank']))))
 
 
@@ -458,12 +460,13 @@ def create_names_dict(names_path):
         returns: names_dict{int:str}: pandas dict of names.dmp with 'tax_id' as keys,
                 'name_txt' as values
     """
-    name_headers = ['tax_id', 'name_txt', 'unique_name', 'name_class']
-    names_df = pd.read_csv(names_path, sep='\t', index_col=False, header=None, dtype=str)\
-        .drop([1, 3, 5, 7], axis=1)
+    name_headers = ['tax_id', 'name_txt', 'name_class']
+    names_df = pd.read_csv(names_path, sep='|', index_col=False, header=None, dtype=str)\
+        .drop([2, 4], axis=1)
     names_df.columns = name_headers
+    for col in names_df.columns:
+        names_df[col] = names_df[col].str.strip()
     names_df = names_df[names_df["name_class"] == "scientific name"]
-    names_df = names_df.drop(columns=['unique_name', 'name_class'])
     return dict(zip(names_df['tax_id'], names_df['name_txt']))
 
 
@@ -684,7 +687,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     return df_combined_full
 
 if __name__ == "__main__":
-    __version__ = "3.4.2"
+    __version__ = "3.4.3"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
