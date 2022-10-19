@@ -693,6 +693,10 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
 
 
 def find_repeats(path_to_tsv):
+    """
+    Given a tsv file, return a set of duplicate taxids.
+    :param path_to_tsv: the path to the tsv file.
+    """
     df = pd.read_csv(path_to_tsv, sep="\t")
     boolean_series = df.duplicated(subset=["tax_id"])
     repeats = df["tax_id"][boolean_series]
@@ -700,6 +704,12 @@ def find_repeats(path_to_tsv):
 
 
 def verify_db(path_to_db):
+    """
+    Verify if there are two files species_taxid.fasta and taxonomy.tsv in the input directory (with the exact same name).
+    Raise an error if either of the two files is missing.
+    Then verify if there are duplicate entries in taxonomy.tsv. Raise an error if there are duplicates.
+    :param path_to_db: the path to the directory that's supposed to contain species_taxid.fasta and taxonomy.tsv
+    """
     # Check whether both species_taxid.fasta and taxonomy.tsv are present
     if not (exists(path_to_db + "/" + "species_taxid.fasta") and exists(path_to_db + "/" + "taxonomy.tsv")):
         raise FileNotFoundError("Missing species_taxid.fasta or taxonomy.tsv")
