@@ -169,14 +169,14 @@ export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.1/emu-v3.4.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.1/silva_database/
 ```
 
-[UNITE general fasta v8.3 fungi](https://plutof.ut.ee/#/doi/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. 
+[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 fungi](https://dx.doi.org/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. 
 This database has not yet been tested or validated with Emu.
 ```bash
 export EMU_DATABASE_DIR=<path_to_database>
 wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-fungi_database/
 ```
 
-[UNITE general fasta v8.3 all eukaryotes](https://plutof.ut.ee/#/doi/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. 
+[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 all eukaryotes](https://dx.doi.org/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. 
 This database has not yet been tested or validated with Emu.
 ```bash
 export EMU_DATABASE_DIR=<path_to_database>
