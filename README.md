@@ -120,7 +120,7 @@ The following files are required to build a custom database:
 | Command	| file(s)	| Description	|
 | :-------  | :----- | :-------- | 
 |--sequences	| database.fasta	| nucleotide sequences	|
-|--seq2tax	| database.fasta	| headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) corresponding tax id	|
+|--seq2tax	| seq2tax.map.tsv	| headerless two column tab-separated values, where each row contains (1) sequence header in database.fasta and (2) corresponding tax id	|
 | *either taxonomy option:*| 
 |--ncbi-taxonomy	| names.dmp & nodes.dmp	| directory containing both names.dmp and nodes.dmp files in NCBI taxonomy format and named accordingly	|
 |--taxonomy-list	| input taxonomy.tsv	| a .tsv file containing complete taxonomic lineages. The first column MUST be the taxonomy ids. Remaining columns can be in any format, then Emu abundance output will match this format|
