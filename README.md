@@ -27,11 +27,14 @@ Expected run time: each of the above commands is expected to complete successful
 
 ##### 1. Download database
 
-Define `<path_to_database>` as your desired database directory. If you desire a different database, skip this step and follow steps below in **Build Custom Database**.
+Define `<path_to_database>` as your desired database directory. If you desire a different database, skip this step and follow steps below in **Build Custom Database**. Our databases are stored on [OSF](https://osf.io/56uf7/). To download from the command line, you will first need to install [osfclient](https://pypi.org/project/osfclient/). Alternatively, you can download directly from the website.
 
 ```bash
+pip install osfclient
 export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/emu_database/
+cd ${EMU_DATABASE_DIR}
+osf -p 56uf7 fetch osfstorage/emu-prebuilt/emu.tar
+tar -xvf emu.tar
 ```
 
 ** Note Emu v3.0+ database requirements differ from previous versions. Check you are using the appropriate database for the version you are running. Both databases contain identical information: a combination of [rrnDB v5.6](https://rrndb-umms-med-umich-edu.translate.goog/?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=fr&_x_tr_pto=sc) and [NCBI 16S RefSeq](https://www.ncbi.nlm.nih.gov/refseq/targetedloci/16S_process/) from 17 September, 2020. Taxonomy is also from NCBI on the same date. The resulting database contains 49,301 sequences from 17,555 unique bacterial and archaeal species.
@@ -154,36 +157,25 @@ emu abundance ./example_customdb/ex.fasta
 Note for NCBI-taxonomy created database: If your taxonomy is missing species-level information, a “pseudo” species will be reported as “unclassified &lt;genus>” where &lt;genus> is the labeled genus in the taxonomic lineage. If genus-level classification is also missing in the lineage, this process will continue moving up the taxonomic lineage until a specified label (&lt;taxa>) is detected. Then, "unclassified &lt;taxa>" will be reported as the species classification instead. 
 
 #### Alternative Databases
+Our pre-built databases and files\scripts used to construct the databases are stored on [OSF](https://osf.io/56uf7/). You can download from our [OSF UI](https://osf.io/56uf7/) or from the command line using [osfclient](https://pypi.org/project/osfclient/). If downloading from the command line, first define the `EMU_PREBUILT_DB` variable. 
 
-[RDP v11.5](https://rdp.cme.msu.edu/) with NCBI taxonomy has been pre-built for Emu v3.0+ and can be downloaded accordingly. 
+| Database	| Command	|
+| :-------  | :----- | 
+|[RDP v11.5](https://rdp.cme.msu.edu/) with NCBI taxonomy has been pre-built for Emu v3.0+. | `export EMU_PREBUILT_DB='rdp'`| 
+|[SILVA v138.1](https://www.arb-silva.de/) has been pre-built for Emu v3.0+ from the [DADA2 SILVA species-level database](https://zenodo.org/record/4587955#.YvqmSezMLOQ).| `export EMU_PREBUILT_DB='silva'`|
+|[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 fungi](https://dx.doi.org/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='unite-fungi'`|
+|[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 all eukaryotes](https://dx.doi.org/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='unite-all'`|
+
+
+Then run the following commands:
 
 ```bash
+pip install osfclient
 export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.0.0/emu-v3.0.0.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.0.0/rdp_database/
+cd ${EMU_DATABASE_DIR}
+osf -p 56uf7 fetch osfstorage/emu-prebuilt/${EMU_PREBUILT_DB}.tar
+tar -xvf ${EMU_PREBUILT_DB}.tar
 ```
-
-
-[SILVA v138.1](https://www.arb-silva.de/) has been pre-built for Emu v3.0+ from the [DADA2 SILVA species-level database](https://zenodo.org/record/4587955#.YvqmSezMLOQ).
-```bash
-export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.1/emu-v3.4.1.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.1/silva_database/
-```
-
-[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 fungi](https://dx.doi.org/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. 
-This database has not yet been tested or validated with Emu.
-```bash
-export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-fungi_database/
-```
-
-[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 all eukaryotes](https://dx.doi.org/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. 
-This database has not yet been tested or validated with Emu.
-```bash
-export EMU_DATABASE_DIR=<path_to_database>
-wget -qO- https://gitlab.com/treangenlab/emu/-/archive/v3.4.2/emu-v3.4.2.tar.gz | tar -C $EMU_DATABASE_DIR -xvz --strip-components=2 emu-v3.4.2/unite-all_database/
-```
-
-Files used to construct these databases are stored on [OSF](https://osf.io/56uf7/)
 
 ### Collapse Taxonomy
 
@@ -243,3 +235,4 @@ Please use citations below if any of the pre-contructed databases are utilized:
 
 ##### UNITE
 - Nilsson, R. H. et al. (2019) The UNITE database for molecular identification of fungi: handling dark taxa and parallel taxonomic classifications. Nucleic Acids Res 47, D259–D264.
+
