@@ -647,7 +647,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
         return(df): Pandas df of the combined relative abundance files
     """
     keep_ranks = RANKS_ORDER[RANKS_ORDER.index(rank):]
-    df_combined_full = pd.DataFrame(columns=keep_ranks)
+    df_combined_full = pd.DataFrame(columns=keep_ranks, dtype=str)
     metric = 'abundance'
     if count_table:
         metric = 'estimated counts'
@@ -656,13 +656,16 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
         if file_extension == '.tsv' and 'rel-abundance' in file:
             name = pathlib.Path(file).stem
             name = name.replace('_rel-abundance', '')
-            df_sample = pd.read_csv(os.path.join(dir_path, file), sep='\t', dtype={rank:str, metric:float})
+            df_sample = pd.read_csv(os.path.join(dir_path, file), sep='\t', dtype=str)
+            df_sample[[metric]] = df_sample[[metric]].apply(pd.to_numeric)
             if rank in df_sample.columns and metric in df_sample.columns:
                 keep_ranks_sample = [value for value in keep_ranks if value in set(df_sample.columns)] #check which keep_ranks are in df_sample
                 if df_sample.at[len(df_sample.index)-1, 'tax_id'] == 'unassigned':
                     df_sample.at[len(df_sample.index)-1, rank] = 'unassigned'
                 df_sample_reduced = df_sample[keep_ranks_sample + [metric]].rename(columns={metric: name})
                 df_sample_reduced = df_sample_reduced.groupby(keep_ranks_sample, dropna=False).sum().reset_index() #sum metric within df_sample_reduced if same tax lineage
+                df_sample_reduced = df_sample_reduced.astype(object)
+                df_sample_reduced[[name]] = df_sample_reduced[[name]].apply(pd.to_numeric)
                 df_combined_full = pd.merge(df_combined_full, df_sample_reduced, how='outer')
     df_combined_full = df_combined_full.set_index(rank).sort_index().reset_index()
     filename_suffix = ""
