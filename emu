@@ -653,7 +653,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
         metric = 'estimated counts'
     for file in os.listdir(dir_path):
         file_extension = pathlib.Path(file).suffix
-        if file_extension == '.tsv' and 'rel-abundance' in file and not file.startsWith('.'):
+        if file_extension == '.tsv' and 'rel-abundance' in file and not file.startswith('.'):
             name = pathlib.Path(file).stem
             name = name.replace('_rel-abundance', '')
             df_sample = pd.read_csv(os.path.join(dir_path, file), sep='\t', dtype=str)
