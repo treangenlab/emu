@@ -206,6 +206,14 @@ Optional additional parameters:
 |--split-tables	| output 2 tables: (1) abundances only at specified rank and (2) taxonomic lineages down to specified rank	|
 |--counts	| output estimated counts rather than relative abundance percentage in combined table. Only includes Emu relative abundance outputs that already have 'estimated counts'  |
 
+### Verify Database
+The verify_db function can be used to validate a database prior to running emu. This function checks if there are two files species_taxid.fasta and taxonomy.tsv in the input directory (with the exact same name) and raises an error if either file is not found. Additionally, it checks if there are duplicate entries in taxonomy.tsv and rasises an error if duplicates are found. 
+
+```bash
+emu verify_db <directory_path>
+```
+
+
 ### System Requirements
 
 All software dependencies are listed in environment.yml. Emu v3.0.0 has been tested on Python v3.7 and used to generate results in manuscript.
