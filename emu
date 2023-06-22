@@ -9,6 +9,7 @@ import os
 import argparse
 import pathlib
 import subprocess
+from os.path import exists
 from sys import stdout
 from operator import add, mul
 from pathlib import Path
@@ -21,7 +22,6 @@ from flatten_dict import unflatten
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-
 
 # static global variables
 CIGAR_OPS = [1, 2, 4, 10]
@@ -143,7 +143,7 @@ def get_cigar_op_log_probabilities(sam_path):
         for i in sorted(zero_locs, reverse=True):
             del cigar_stats_primary[i]
     n_char = sum(cigar_stats_primary)
-    return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs, \
+    return [math.log(x) for x in np.array(cigar_stats_primary) / n_char], zero_locs, \
            dict_longest_align
 
 
@@ -163,7 +163,7 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
 
     ref_name, query_name = alignment.reference_name, alignment.query_name
     log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats))) * \
-                (dict_longest_align[query_name]/align_len)
+                (dict_longest_align[query_name] / align_len)
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
@@ -192,7 +192,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                 cigar_stats = get_align_stats(alignment)
                 log_score, query_name, species_tid = \
                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
-                                        dict_longest_align, align_len)
+                                         dict_longest_align, align_len)
 
                 if query_name not in log_p_rgs:
                     log_p_rgs[query_name] = ([species_tid], [log_score])
@@ -217,12 +217,12 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                         del cigar_stats[i]
                     log_score, query_name, species_tid = \
                         compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
-                                            dict_longest_align, align_len)
+                                             dict_longest_align, align_len)
 
                     if query_name not in log_p_rgs:
                         log_p_rgs[query_name] = ([species_tid], [log_score])
                     elif query_name in log_p_rgs and species_tid not in log_p_rgs[query_name][0]:
-                        log_p_rgs[query_name] = (log_p_rgs[query_name][0] +[species_tid],
+                        log_p_rgs[query_name] = (log_p_rgs[query_name][0] + [species_tid],
                                                  log_p_rgs[query_name][1] + [log_score])
                     else:
                         logprgs_idx = log_p_rgs[query_name][0].index(species_tid)
@@ -238,8 +238,8 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
 
     ## remove low likelihood alignments?
     ## remove if p(r|s) < 0.01
-    #min_p_thresh = math.log(0.01)
-    #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
+    # min_p_thresh = math.log(0.01)
+    # log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
     return log_p_rgs, unassigned_count, len(assigned_reads)
 
 
@@ -276,7 +276,7 @@ def expectation_maximization(log_p_rgs, freq):
                 log_p_rns.append(logprns_val)
 
         if len(valid_seqs) != 0:
-            #np.array([log_p_rns], dtype=np.float64)
+            # np.array([log_p_rns], dtype=np.float64)
             logc = -np.max(log_p_rns)  # calculate fixed multiplier, c
             prnsc = np.exp(log_p_rns + logc)  # calculates exp(log(L(r|s) * f(s) * c))
             prc = np.sum(prnsc)  # calculates sum of (L(r|s) * f(s) * c) for each read
@@ -312,9 +312,9 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
     freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
 
     # set output abundance threshold
-    freq_thresh = 1/n_reads
+    freq_thresh = 1 / n_reads
     if n_reads > 1000:
-        freq_thresh = 10/n_reads
+        freq_thresh = 10 / n_reads
 
     # performs iterations of the expectation_maximization algorithm
     total_log_likelihood = -math.inf
@@ -336,7 +336,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
         if log_likelihood_diff < lli_thresh:
             stdout.write("Number of EM iterations: {}\n".format(counter))
             freq = {k: v for k, v in freq.items() if v >= freq_thresh}
-                # remove tax id if less than the frequency threshold
+            # remove tax id if less than the frequency threshold
             freq_full, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq)
             freq_set_thresh = None
             if freq_thresh < input_threshold:
@@ -345,8 +345,8 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
                     expectation_maximization(log_p_rgs, freq)
             return freq_full, freq_set_thresh, p_sgr
 
-        #output current estimation
-        #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
+        # output current estimation
+        # freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
         counter += 1
 
 
@@ -368,7 +368,7 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
     while names_dict[taxid] != "root":
         tup = nodes_dict[taxid]
         # find the name for each taxonomic rank
-        if tup[1] in RANKS_PRINTOUT: # check rank in printout list
+        if tup[1] in RANKS_PRINTOUT:  # check rank in printout list
             idx = RANKS_PRINTOUT.index(tup[1])
             lineage_list[idx] = names_dict[taxid]
         taxid = tup[0]
@@ -388,12 +388,12 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, assigned_count,
         counts(boolean): True if include estimated counts in output .tsv file
         returns(df): pandas df with lineage and abundances for values in f
     """
-    #add tax lineage for values in freq
+    # add tax lineage for values in freq
     results_df = pd.DataFrame(zip(list(freq.keys()) + ['unassigned'],
                                   list(freq.values()) + [0]),
                               columns=["tax_id", "abundance"]).set_index('tax_id')
     results_df = results_df.join(taxonomy_df, how='left').reset_index()
-        #add in the estimated count values for the assigned and unassigned counts
+    # add in the estimated count values for the assigned and unassigned counts
     if counts:
         counts_series = pd.concat([(results_df["abundance"] * assigned_count)[:-1],
                                    pd.Series(unassigned_count)], ignore_index=True)
@@ -408,7 +408,7 @@ def generate_alignments(in_file_list, out_basename, database):
         in_file_list(list(str)): list of path(s) to input sequences
         out_basename(str): path and basename for output files
     """
-    #indicate filepath and create file
+    # indicate filepath and create file
     input_file = " ".join(in_file_list)
     filetype = pathlib.PurePath(args.input_file[0]).suffix
     if filetype == '.sam':
@@ -461,7 +461,7 @@ def create_names_dict(names_path):
                 'name_txt' as values
     """
     name_headers = ['tax_id', 'name_txt', 'name_class']
-    names_df = pd.read_csv(names_path, sep='|', index_col=False, header=None, dtype=str)\
+    names_df = pd.read_csv(names_path, sep='|', index_col=False, header=None, dtype=str) \
         .drop([2, 4], axis=1)
     names_df.columns = name_headers
     for col in names_df.columns:
@@ -582,7 +582,7 @@ def build_ncbi_taxonomy(unique_tids, nodes_dict, names_dict, filepath):
     """
     with open(filepath, "w", encoding="utf8") as file:
         # write the header to the file
-        dummy_str = '\t'.join(['%s',] * len(RANKS_PRINTOUT)) + '\n'
+        dummy_str = '\t'.join(['%s', ] * len(RANKS_PRINTOUT)) + '\n'
         file.write(dummy_str % tuple(RANKS_PRINTOUT))
         # write each lineage as a row in the file
         for tid in unique_tids:
@@ -606,7 +606,7 @@ def build_direct_taxonomy(tid_set, lineage_path, taxonomy_file):
             tax_output_file.write(first_line.split("\t", 1)[1])
             for line in file:
                 tax_id = line.split("\t", 1)[0]
-                if tax_id in tid_set: #only add if taxid is in fasta
+                if tax_id in tid_set:  # only add if taxid is in fasta
                     tax_output_file.write(line)
 
 
@@ -637,6 +637,7 @@ def collapse_rank(path, rank):
     output_path = "{}-{}.tsv".format(os.path.splitext(path)[0], rank)
     df_emu_copy.to_csv(output_path, sep='\t')
     stdout.write("File generated: {}\n".format(output_path))
+
 
 def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     """ Combines multiple Emu output relative abundance tables into a single table.
@@ -685,12 +686,41 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
         stdout.write("Combined table generated: {}\n".format(out_path))
     return df_combined_full
 
+
+def find_repeats(path_to_tsv):
+    """
+    Given a tsv file, return a set of duplicate taxids.
+    :param path_to_tsv: the path to the tsv file.
+    """
+    df = pd.read_csv(path_to_tsv, sep="\t")
+    boolean_series = df.duplicated(subset=["tax_id"])
+    repeats = df["tax_id"][boolean_series]
+    return set(repeats)
+
+
+def verify_db(path_to_db):
+    """
+    Verify if there are two files species_taxid.fasta and taxonomy.tsv in the input directory (with the exact same name).
+    Raise an error if either of the two files is missing.
+    Then verify if there are duplicate entries in taxonomy.tsv. Raise an error if there are duplicates.
+    :param path_to_db: the path to the directory that's supposed to contain species_taxid.fasta and taxonomy.tsv
+    """
+    # Check whether both species_taxid.fasta and taxonomy.tsv are present
+    if not (exists(path_to_db + "/" + "species_taxid.fasta") and exists(path_to_db + "/" + "taxonomy.tsv")):
+        raise FileNotFoundError("Missing species_taxid.fasta or taxonomy.tsv")
+    # Check for duplicates in taxonomy.tsv
+    repeats = find_repeats(path_to_db + "/" + "taxonomy.tsv")
+    if len(repeats) > 0:
+        raise ValueError("There are one or more duplicate entries in this database:\n" + str(repeats))
+    print("Database looks good!")
+
+
 if __name__ == "__main__":
     __version__ = "3.4.5"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
-    abundance_parser = subparsers.\
+    abundance_parser = subparsers. \
         add_parser("abundance", help="Generate relative abundance estimates")
     abundance_parser.add_argument(
         'input_file', type=str, nargs='+',
@@ -733,6 +763,9 @@ if __name__ == "__main__":
         '--threads', type=int, default=3,
         help='threads utilized by minimap [3]')
 
+    verify_db_parser = subparsers.add_parser("verify_db", help="Check the DB for duplicates")
+    verify_db_parser.add_argument('path_to_db', type=str, help='path to the directory containing two files')
+
     build_db_parser = subparsers.add_parser("build-database",
                                             help="Build custom Emu database")
     build_db_parser.add_argument(
@@ -762,7 +795,7 @@ if __name__ == "__main__":
         help='collapsed taxonomic rank')
 
     combine_parser = subparsers.add_parser("combine-outputs",
-                                            help="Combine Emu rel abundance outputs to a single table")
+                                           help="Combine Emu rel abundance outputs to a single table")
     combine_parser.add_argument(
         'dir_path', type=str,
         help='path to directory containing Emu output files')
@@ -775,7 +808,11 @@ if __name__ == "__main__":
     combine_parser.add_argument(
         '--counts', action="store_true",
         help='counts rather than abundances in output table')
+
     args = parser.parse_args()
+
+    if args.subparser_name == "verify_db":
+        verify_db(args.path_to_db)
 
     if args.subparser_name == "abundance":
         # check input file is fasta/q or sam alignment file
@@ -803,11 +840,10 @@ if __name__ == "__main__":
         log_prob_rgs, counts_unassigned, counts_assigned = log_prob_rgs_dict(
             SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
         f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
-                                                                   db_species_tids,
-                                                                   .01, args.min_abundance)
+                                                                              db_species_tids,
+                                                                              .01, args.min_abundance)
         freq_to_lineage_df(f_full, "{}_rel-abundance".format(out_file), df_taxonomy,
                            counts_assigned, counts_unassigned, args.keep_counts)
-
 
         # output read assignment distributions as a tsv
         if args.keep_read_assignments:
@@ -832,7 +868,6 @@ if __name__ == "__main__":
         if not args.keep_files:
             if os.path.exists(SAM_FILE):
                 os.remove(SAM_FILE)
-
 
     # create a custom database with ncbi taxonomy
     if args.subparser_name == "build-database":
@@ -863,7 +898,6 @@ if __name__ == "__main__":
         else:
             build_direct_taxonomy(db_unique_ids, args.taxonomy_list, output_taxonomy_location)
         stdout.write("Database creation successful\n")
-
 
     # collapse Emu results at desired taxonomic rank
     if args.subparser_name == "collapse-taxonomy":
