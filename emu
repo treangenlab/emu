@@ -319,7 +319,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
     # performs iterations of the expectation_maximization algorithm
     total_log_likelihood = -math.inf
     while True:
-        freq, updated_log_likelihood, _ = expectation_maximization(log_p_rgs, freq)
+        freq, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq)
 
         # check f vector sums to 1
         freq_sum = sum(freq.values())
@@ -334,8 +334,14 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
 
         # exit loop if log likelihood increase less than threshold
         if log_likelihood_diff < lli_thresh:
+        #if True:
             stdout.write("Number of EM iterations: {}\n".format(counter))
-            freq = {k: v for k, v in freq.items() if v >= freq_thresh}
+            ## set up to remove from freq
+            dist_df = pd.DataFrame(p_sgr)
+            best_hit = dist_df.idxmax(axis=1)
+            keep_classifications = set(best_hit)
+            freq = {k: v for k, v in freq.items() if k in keep_classifications}
+            #freq = {k: v for k, v in freq.items() if v >= freq_thresh}
                 # remove tax id if less than the frequency threshold
             freq_full, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq)
             freq_set_thresh = None
@@ -343,7 +349,7 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
                 freq = {k: v for k, v in freq_full.items() if v >= input_threshold}
                 freq_set_thresh, updated_log_likelihood, p_sgr = \
                     expectation_maximization(log_p_rgs, freq)
-            return freq_full, freq_set_thresh, p_sgr
+            return freq_full, freq_set_thresh, p_sgr, best_hit
 
         #output current estimation
         #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
@@ -802,9 +808,9 @@ if __name__ == "__main__":
             get_cigar_op_log_probabilities(SAM_FILE)
         log_prob_rgs, counts_unassigned, counts_assigned = log_prob_rgs_dict(
             SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
-        f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
+        f_full, f_set_thresh, read_dist, top_hit = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
-                                                                   .01, args.min_abundance)
+                                                                   0.01, args.min_abundance)
         freq_to_lineage_df(f_full, "{}_rel-abundance".format(out_file), df_taxonomy,
                            counts_assigned, counts_unassigned, args.keep_counts)
 
@@ -812,6 +818,7 @@ if __name__ == "__main__":
         # output read assignment distributions as a tsv
         if args.keep_read_assignments:
             output_read_assignments(read_dist, "{}_read-assignment-distributions".format(out_file))
+            top_hit.to_csv("{}_top_hit.tsv".format(out_file), sep='\t', header=['tax_id'])
 
         # convert and save frequency to a tsv
         if f_set_thresh:
