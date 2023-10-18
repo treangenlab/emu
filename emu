@@ -12,6 +12,8 @@ import subprocess
 from sys import stdout
 from operator import add, mul
 from pathlib import Path
+from multiprocessing import Pool
+from functools import partial
 
 import math
 import pysam
@@ -243,7 +245,40 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     return log_p_rgs, unassigned_count, len(assigned_reads)
 
 
-def expectation_maximization(log_p_rgs, freq):
+def expectation_maximization_helper(key_val_pair, freq):
+    """Helper function to compute values on a single read.
+
+    key_val_pair (str, (int, float)): query_name, (ref_tax_id, log(L(query_name|ref_tax_id)))
+    freq{int:float}: dict[species_tax_id]:likelihood species is present in sample
+    returns:  corresponding values for read described in expectation_maximization documenation.
+    """
+    log_p_rgs_key, log_p_rgs_val = key_val_pair
+    p_sgr_flat = {}
+    logpr_sum = 0
+    valid_seqs, log_p_rns = [], []
+    # check if sequences were found in frequency vector
+    for seq in range(len(log_p_rgs_val[0])):
+        s_val = log_p_rgs_val[0][seq]
+        if s_val in freq and freq[s_val] != 0:
+            logprns_val = log_p_rgs_val[1][seq] + math.log(freq[s_val])
+            # calculates log(L(r|s))+log(f(s)) for each sequence
+            valid_seqs.append(s_val)
+            log_p_rns.append(logprns_val)
+
+    if len(valid_seqs) != 0:
+        #np.array([log_p_rns], dtype=np.float64)
+        logc = -np.max(log_p_rns)  # calculate fixed multiplier, c
+        prnsc = np.exp(log_p_rns + logc)  # calculates exp(log(L(r|s) * f(s) * c))
+        prc = np.sum(prnsc)  # calculates sum of (L(r|s) * f(s) * c) for each read
+        logpr_sum += (np.log(prc) - logc)  # add to sum of log likelihood
+        # calculates P(s|r) for each sequence
+        for seq in enumerate(valid_seqs):
+            p_sgr_flat[(seq[1], log_p_rgs_key)] = prnsc[seq[0]] / prc
+
+    return (p_sgr_flat, logpr_sum, len(valid_seqs) != 0)
+
+
+def expectation_maximization(log_p_rgs, freq, pool=None):
     """One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
     probabilities in log_p_rgs.
 
@@ -264,34 +299,26 @@ def expectation_maximization(log_p_rgs, freq):
 
     p_sgr_flat = {}
     logpr_sum, n_reads = 0, 0
-    for read in log_p_rgs:
-        valid_seqs, log_p_rns = [], []
-        # check if sequences were found in frequency vector
-        for seq in range(len(log_p_rgs[read][0])):
-            s_val = log_p_rgs[read][0][seq]
-            if s_val in freq and freq[s_val] != 0:
-                logprns_val = log_p_rgs[read][1][seq] + math.log(freq[s_val])
-                # calculates log(L(r|s))+log(f(s)) for each sequence
-                valid_seqs.append(s_val)
-                log_p_rns.append(logprns_val)
+    partial_helper = partial(expectation_maximization_helper, freq=freq)
 
-        if len(valid_seqs) != 0:
-            #np.array([log_p_rns], dtype=np.float64)
-            logc = -np.max(log_p_rns)  # calculate fixed multiplier, c
-            prnsc = np.exp(log_p_rns + logc)  # calculates exp(log(L(r|s) * f(s) * c))
-            prc = np.sum(prnsc)  # calculates sum of (L(r|s) * f(s) * c) for each read
-            logpr_sum += (np.log(prc) - logc)  # add to sum of log likelihood
-            n_reads += 1
-            # calculates P(s|r) for each sequence
-            for seq in enumerate(valid_seqs):
-                p_sgr_flat[(seq[1], read)] = prnsc[seq[0]] / prc
+    if pool is None:
+        results_iter = (partial_helper(kvp) for kvp in log_p_rgs.items())
+    else:
+        results_iter = pool.map(partial_helper, log_p_rgs.items())
+
+    for read_p_sgr_flat, read_logpr_sum, read_is_valid in results_iter:
+        p_sgr_flat.update(read_p_sgr_flat)
+        logpr_sum += read_logpr_sum
+        n_reads += read_is_valid
+
+
     p_sgr = unflatten(p_sgr_flat)
     # calculates updated frequency vector
     frq = {tax_id: sum(read_id.values()) / n_reads for tax_id, read_id in p_sgr.items()}
     return frq, logpr_sum, p_sgr
 
 
-def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold):
+def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_threshold, threads=1):
     """Full expectation maximization algorithm for alignments in log_L_rgs dict.
     Calls the expectation_maximization function during each iteration of the algorithm.
     Stops iterations once the log likelihood is calculated to have increased less than threshold.
@@ -318,8 +345,14 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
 
     # performs iterations of the expectation_maximization algorithm
     total_log_likelihood = -math.inf
+
+    if threads > 1:
+        pool = Pool(threads)
+    else:
+        pool = None
+
     while True:
-        freq, updated_log_likelihood, _ = expectation_maximization(log_p_rgs, freq)
+        freq, updated_log_likelihood, _ = expectation_maximization(log_p_rgs, freq, pool)
 
         # check f vector sums to 1
         freq_sum = sum(freq.values())
@@ -337,12 +370,12 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
             stdout.write("Number of EM iterations: {}\n".format(counter))
             freq = {k: v for k, v in freq.items() if v >= freq_thresh}
                 # remove tax id if less than the frequency threshold
-            freq_full, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq)
+            freq_full, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq, pool)
             freq_set_thresh = None
             if freq_thresh < input_threshold:
                 freq = {k: v for k, v in freq_full.items() if v >= input_threshold}
                 freq_set_thresh, updated_log_likelihood, p_sgr = \
-                    expectation_maximization(log_p_rgs, freq)
+                    expectation_maximization(log_p_rgs, freq, pool)
             return freq_full, freq_set_thresh, p_sgr
 
         #output current estimation
@@ -804,7 +837,8 @@ if __name__ == "__main__":
             SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
         f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
-                                                                   .01, args.min_abundance)
+                                                                   .01, args.min_abundance,
+                                                                   args.threads)
         freq_to_lineage_df(f_full, "{}_rel-abundance".format(out_file), df_taxonomy,
                            counts_assigned, counts_unassigned, args.keep_counts)
 
