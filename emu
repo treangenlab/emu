@@ -327,9 +327,9 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
             raise ValueError("f sums to {}, rather than 1".format(freq_sum))
 
         # confirm log likelihood increase
-        log_likelihood_diff = updated_log_likelihood - total_log_likelihood
+        log_likelihood_diff = round(updated_log_likelihood, 2) - round(total_log_likelihood, 2)
         total_log_likelihood = updated_log_likelihood
-        if log_likelihood_diff < 0:
+        if log_likelihood_diff < -1:
             raise ValueError("total_log_likelihood decreased from prior iteration")
 
         # exit loop if log likelihood increase less than threshold
@@ -686,7 +686,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     return df_combined_full
 
 if __name__ == "__main__":
-    __version__ = "3.4.5"
+    __version__ = "3.4.6"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
