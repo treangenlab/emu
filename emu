@@ -417,10 +417,17 @@ def generate_alignments(in_file_list, out_basename, database):
     sam_align_file = "{}_emu_alignments.sam".format(out_basename)
     db_sequence_file = os.path.join(database, 'species_taxid.fasta')
 
-    subprocess.check_output("minimap2 -ax {} -t {} -N {} -p .9 -K {} {} {} -o {}".
-                            format(args.type, args.threads, args.N, args.K,
-                                   db_sequence_file, input_file, sam_align_file),
-                            shell=True)
+    # force minimap2 to consider the forward transcript strand only
+    if args.mm2_forward_only:
+        subprocess.check_output("minimap2 -ax {} -t {} -N {} -p .9 -u f -K {} {} {} -o {}".
+                                format(args.type, args.threads, args.N, args.K,
+                                    db_sequence_file, input_file, sam_align_file),
+                                shell=True)
+    else:
+        subprocess.check_output("minimap2 -ax {} -t {} -N {} -p .9 -K {} {} {} -o {}".
+                                format(args.type, args.threads, args.N, args.K,
+                                    db_sequence_file, input_file, sam_align_file),
+                                shell=True)
 
     return sam_align_file
 
@@ -686,7 +693,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     return df_combined_full
 
 if __name__ == "__main__":
-    __version__ = "3.4.5"
+    __version__ = "3.4.6"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -711,6 +718,9 @@ if __name__ == "__main__":
     abundance_parser.add_argument(
         '--K', '-K', type=int, default=500000000,
         help='minibatch size for minimap2 mapping [500M]')
+    abundance_parser.add_argument(
+        '--mm2-forward-only', action="store_true",
+        help='force minimap2 to consider the forward transcript strand only')
     abundance_parser.add_argument(
         '--output-dir', type=str, default="./results",
         help='output directory name [./results]')
