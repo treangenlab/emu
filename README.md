@@ -180,8 +180,7 @@ tar -xvf ${EMU_PREBUILT_DB}.tar
 
 ### Collapse Taxonomy
 
-The collapse-taxonomy function can be used on any emu output &lt;.tsv> file to generate an additional output collapsed 
-at the desired taxonomic rank. File is output the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. 
+The collapse-taxonomy function can be used to generate an additional relative abundance profile from an emu output &lt;.tsv> file, collapsed at the desired taxonomic rank. The input &lt;.tsv> file must contain a unique column for each taxonomic rank (such as those constructed by the emu default database or the preconstructed Silva database with taxonomy_split, etc). The collapsed taxonomy file is output to the same folder as the input file, with filename:&lt;input_file>-&lt;rank>.tsv. 
 Accepted ranks: ['species', 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
 
 ```bash
