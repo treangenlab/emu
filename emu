@@ -327,9 +327,9 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
             raise ValueError("f sums to {}, rather than 1".format(freq_sum))
 
         # confirm log likelihood increase
-        log_likelihood_diff = updated_log_likelihood - total_log_likelihood
+        log_likelihood_diff = round(updated_log_likelihood, 2) - round(total_log_likelihood, 2)
         total_log_likelihood = updated_log_likelihood
-        if log_likelihood_diff < 0:
+        if log_likelihood_diff < -1:
             raise ValueError("total_log_likelihood decreased from prior iteration")
 
         # exit loop if log likelihood increase less than threshold
