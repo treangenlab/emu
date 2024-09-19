@@ -86,12 +86,13 @@ def output_sequences(in_path, seq_output_path, input_type, keep_ids):
         keep_ids (set): set of seuqence id strings
     """
     # Filter and write only the sequences with matching read IDs
-    with open(in_path, "r") as in_file, open("{}.{}".format(seq_output_path, input_type), "w") as out_file:
+    with open(in_path, "r", encoding="utf-8") as in_file, \
+            open("{}.{}".format(seq_output_path, input_type), "w", encoding="utf-8") as out_seq_file:
         # Parse the FASTA file and filter by read IDs
         filtered_sequences = (seq for seq in SeqIO.parse(in_file, input_type) if seq.id in keep_ids)
 
         # Write the filtered sequences to the output file
-        SeqIO.write(filtered_sequences, out_file, input_type)
+        SeqIO.write(filtered_sequences, out_seq_file, input_type)
 
 
 def get_cigar_op_log_probabilities(sam_path):
@@ -369,7 +370,8 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, mapped_count,
         taxonomy_df(df): pandas df of all db sequence taxonomy with index 'tax_id'
         mapped_count(int): number of mapped reads
         unmapped_count(int): number of unmapped reads
-        mapped_unclassified_count(int): number of that mapped but were assigned due to low abundant classification
+        mapped_unclassified_count(int): number of that mapped but were assigned due to
+                                        low abundant classification
         counts(boolean): True if include estimated counts in output .tsv file
         returns(df): pandas df with lineage and abundances for values in f
     """
@@ -646,11 +648,15 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
             df_sample = pd.read_csv(os.path.join(dir_path, file), sep='\t', dtype=str)
             df_sample[[metric]] = df_sample[[metric]].apply(pd.to_numeric)
             if rank in df_sample.columns and metric in df_sample.columns:
-                keep_ranks_sample = [value for value in keep_ranks if value in set(df_sample.columns)] #check which keep_ranks are in df_sample
+                #check which keep_ranks are in df_sample
+                keep_ranks_sample = [value for value in keep_ranks
+                                     if value in set(df_sample.columns)]
                 if df_sample.at[len(df_sample.index)-1, 'tax_id'] == 'unmapped':
                     df_sample.at[len(df_sample.index)-1, rank] = 'unmapped'
-                df_sample_reduced = df_sample[keep_ranks_sample + [metric]].rename(columns={metric: name})
-                df_sample_reduced = df_sample_reduced.groupby(keep_ranks_sample, dropna=False).sum().reset_index() #sum metric within df_sample_reduced if same tax lineage
+                df_sample_reduced = df_sample[keep_ranks_sample +
+                                              [metric]].rename(columns={metric: name})
+                df_sample_reduced = df_sample_reduced.groupby(keep_ranks_sample, dropna=False)\
+                    .sum().reset_index() #sum metric within df_sample_reduced if same tax lineage
                 df_sample_reduced = df_sample_reduced.astype(object)
                 df_sample_reduced[[name]] = df_sample_reduced[[name]].apply(pd.to_numeric)
                 df_combined_full = pd.merge(df_combined_full, df_sample_reduced, how='outer')
@@ -659,7 +665,8 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     if count_table:
         filename_suffix = "-counts"
     if split_files:
-        abundance_out_path = os.path.join(dir_path, "emu-combined-abundance-{}{}.tsv".format(rank, filename_suffix))
+        abundance_out_path = os.path.join(dir_path, "emu-combined-abundance-{}{}.tsv"
+                                          .format(rank, filename_suffix))
         tax_out_path = os.path.join(dir_path, "emu-combined-taxonomy-{}.tsv".format(rank))
         stdout.write("Combined taxonomy table generated: {}\n".format(tax_out_path))
         df_combined_full[keep_ranks].to_csv(tax_out_path, sep='\t', index=False)
@@ -749,7 +756,7 @@ if __name__ == "__main__":
         help='collapsed taxonomic rank')
 
     combine_parser = subparsers.add_parser("combine-outputs",
-                                            help="Combine Emu rel abundance outputs to a single table")
+                help="Combine Emu rel abundance outputs to a single table")
     combine_parser.add_argument(
         'dir_path', type=str,
         help='path to directory containing Emu output files')
@@ -820,10 +827,8 @@ if __name__ == "__main__":
                 INPUT_FILETYPE = "fastq"
             output_sequences(args.input_file[0], "{}_unmapped".format(out_file), INPUT_FILETYPE,
                                                 set_unmapped)
-
-            output_sequences(args.input_file[0], "{}_unclassified_mapped".format(out_file), INPUT_FILETYPE,
-                            mapped_unclassified)
-
+            output_sequences(args.input_file[0], "{}_unclassified_mapped".format(out_file),
+                             INPUT_FILETYPE, mapped_unclassified)
 
         # clean up extra file
         if not args.keep_files:

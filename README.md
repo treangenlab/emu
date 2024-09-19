@@ -105,7 +105,6 @@ Each step of the installation process is expected to take a matter of seconds.
 
 **Here, "unmapped reads" are reads that did not result in a mapping to the provided database with minimap2. "Unclassified mapped reads" are those that mapped only to database sequences of species that are presumed to not be present in the sample by Emu's algorithm (likely due to low overall abundance).
 
-
 Note: If you are experiencing heavy RAM consumption, first upgrade minimap2 to at least v2.22. If memory is still an issue, try decreasing the number of secondary alignments evaluated for each read (--N).
 
 
