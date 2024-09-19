@@ -96,14 +96,18 @@ Each step of the installation process is expected to take a matter of seconds.
 |--output-dir| ./results| directory for output results|
 |--output-basename| stem of input_file(s)| basename of all output files saved in output-dir; default utilizes basename from input file(s)|
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
-|--keep-counts| FALSE| include estimated read counts for each species in output|
+|--keep-counts| FALSE| include estimated read counts for each species in output*|
 |--keep-read-assignments| FALSE| output .tsv file with read assignment distributions: each row as an input read; each entry as the likelihood it is dervied from that taxa (taxid is the column header); each row sums to 1|
-|--output-unclassified| FALSE| generate a separate output file of unclassified sequences|
+|--output-unclassified| FALSE| generate two additional sequence files of unmapped and unclassified mapped input reads**|
 |--threads| 3| number of threads utilized by minimap2|
+
+*Estimated read counts are based on likelihood probabilities and therefore may not be integer values. They are calculated as the product of estimated relative abundance and total classified reads.
+
+**Here, "unmapped reads" are reads that did not result in a mapping to the provided database with minimap2. "Unclassified mapped reads" are those that mapped only to database sequences of species that are presumed to not be present in the sample by Emu's algorithm (likely due to low overall abundance).
 
 
 Note: If you are experiencing heavy RAM consumption, first upgrade minimap2 to at least v2.22. If memory is still an issue, try decreasing the number of secondary alignments evaluated for each read (--N).
-Note: Estimated read counts are based on likelihood probabilities and therefore may not be integer values.
+
 
 ### Build Custom Database
 
