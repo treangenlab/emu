@@ -1,4 +1,4 @@
-name: Python Package using Conda
+name: Run python tests
 
 on: [push, pull_request]
 
@@ -10,24 +10,52 @@ jobs:
     defaults:
       run:
         shell: bash -l {0}
+    env:
+      MAMBA_ROOT_PREFIX: ${{ runner.temp }}/micromamba
+      ENV_NAME: testenv
 
     steps:
     - uses: actions/checkout@v4
+
     - name: Set up Python 3.6.15
       uses: actions/setup-python@v3
       with:
         python-version: '3.6.15'
-    - name: Create conda/mamba environment using micromamba
-      uses: mamba-org/setup-micromamba@v1
+
+    - name: Cache micromamba binary
+      id: cache-micromamba
+      uses: actions/cache@v4
       with:
-        environment-file: environment.yml
-        cache-downloads: true
-    - name: Add micromamba to system path                                                                                                                                                                                                                         
-      run: |                                                                                                                                                                                                                                                 
-        # $CONDA is an environment variable pointing to the root of the miniconda directory                                                                                                                                                                  
-        echo $CONDA/bin >> $GITHUB_PATH
+        path: ${{ env.MAMBA_ROOT_PREFIX }}
+        key: micromamba-bin-${{ runner.os }}
+
+    - name: Install micromamba
+      if: steps.cache-micromamba.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p $MAMBA_ROOT_PREFIX
+        curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C $MAMBA_ROOT_PREFIX bin/micromamba
+
+    - name: Cache micromamba environment
+      id: cache-env
+      uses: actions/cache@v4
+      with:
+        path: ~/.conda/envs/${{ env.ENV_NAME }}
+        key: mamba-env-${{ hashFiles('environment.yml') }}
+
+    - name: Create micromamba environment
+      run: |
+        export PATH=$MAMBA_ROOT_PREFIX/bin:$PATH
+        if [ "${{ steps.cache-env.outputs.cache-hit }}" != "true" ]; then
+          echo "Creating new environment..."
+          micromamba create -y -n $ENV_NAME -f environment.yml
+        else
+          echo "Using cached environment."
+        fi
+        echo "PATH=$MAMBA_ROOT_PREFIX/bin:$PATH" >> $GITHUB_ENV
+
     - name: Set EMU_DATABASE env variable
       run: echo "EMU_DATABASE_DIR=./emu_database" >> $GITHUB_ENV
+
     - name: Lint with flake8
       run: |
         micromamba install flake8
@@ -35,7 +63,8 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
+
+    - name: Run Python tests with pytest
       run: |
         micromamba install pytest
         pytest
