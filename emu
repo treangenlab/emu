@@ -646,6 +646,7 @@ def build_direct_taxonomy(tid_set, lineage_path, taxonomy_file):
                 column and the taxid in next column
         taxonomy_file(str): path to output tsv file containing lineages
     """
+    tid_in_tax_output = set()
     with open(taxonomy_file, 'w', encoding="utf8") as tax_output_file:
         with open(lineage_path, encoding="utf8") as file:
             first_line = file.readline()
@@ -654,7 +655,11 @@ def build_direct_taxonomy(tid_set, lineage_path, taxonomy_file):
             for line in file:
                 tax_id = line.split("\t", 1)[0]
                 if tax_id in tid_set: #only add if taxid is in fasta
+                    if tax_id in tid_in_tax_output:
+                        raise ValueError(f"Taxid is duplicated in input taxonomy lineage file: {tax_id}. "
+                                         f"Please de-duplicate and try again.")
                     tax_output_file.write(line)
+                    tid_in_tax_output.add(tax_id)
 
 
 def collapse_rank(path, rank):
@@ -738,7 +743,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     return df_combined_full
 
 if __name__ == "__main__":
-    __version__ = "3.5.4"
+    __version__ = "3.5.5"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
