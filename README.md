@@ -224,7 +224,7 @@ Repository for reproduction of results in manuscript: [Emu-benchmark](https://gi
 
 We have not developed pipelines for downsteam analysis of Emu results, but our users have! 
 
-- [TRANA Nextflow pipeline](https://villapollab.github.io/covid_biome/) with FastQC, Nanoplot, MultiQC, Porechop_ABI, Filtlong, EMU, and Krona, courtesy of Genomic Medicine Sweden
+- [TRANA Nextflow pipeline](https://github.com/genomic-medicine-sweden/TRANA) with FastQC, Nanoplot, MultiQC, Porechop_ABI, Filtlong, EMU, and Krona, courtesy of Genomic Medicine Sweden
 - [R Scripts for plot](https://villapollab.github.io/covid_biome/)
 - [Snakemake pipeline (in progess..)](https://github.com/matinnuhamunada/ONT_16S_Analysis)
 
