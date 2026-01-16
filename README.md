@@ -167,7 +167,9 @@ Our pre-built databases and files\scripts used to construct the databases are st
 | Database	| Command	|
 | :-------  | :----- | 
 |[RDP v11.5](https://rdp.cme.msu.edu/) with NCBI taxonomy has been pre-built for Emu v3.0+. | `export EMU_PREBUILT_DB='rdp'`| 
-|[SILVA v138.1](https://www.arb-silva.de/) has been pre-built for Emu v3.0+ from the [DADA2 SILVA species-level database](https://zenodo.org/record/4587955#.YvqmSezMLOQ).| `export EMU_PREBUILT_DB='silva'`|
+|[SILVA v138.1](https://www.arb-silva.de/) has been pre-built for Emu v3.0+ from the [DADA2 SILVA species-level database]
+(https://zenodo.org/record/4587955#.YvqmSezMLOQ).| `export EMU_PREBUILT_DB='silva'`|
+|[SILVA v138.2](https://www.arb-silva.de/) has been built courtesy of @maddne. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='silva-138.2'`|
 |[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 fungi](https://dx.doi.org/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='unite-fungi'`|
 |[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 all eukaryotes](https://dx.doi.org/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='unite-all'`|
 
