@@ -126,6 +126,15 @@ def get_align_len(alignment):
     return sum(alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS_ALL)
 
 
+def get_aligned_query_len(alignment):
+    """Retrieve aligned query length excluding soft/hard clipping.
+
+        alignment (pysam.AlignmentFile): align of interest
+        return (int): aligned query length excluding S/H
+    """
+    return alignment.query_alignment_length
+
+
 def output_sequences(in_path, seq_output_path, input_type, keep_ids):
     """Output specified sequences from input_file based on sequence id.
 
@@ -235,13 +244,18 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
 
     # track PID filtering stats
     filtered_pid_count = 0
+
+    # track aligned length filtering stats
+    filtered_align_len_count = 0
+
     debug_path = os.path.join(args.output_dir, "pid_debug_output.txt")
     debug_pid_file = open(debug_path, "w", encoding="utf-8")
     debug_pid_file.write("read_id\tref_id\tNM\tpid\n")
 
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch():
-            align_len = get_align_len(alignment)   
+            align_len = get_align_len(alignment)
+            align_len_q = get_aligned_query_len(alignment)
             if alignment.reference_name and align_len:
 
                     # Output the PID filtering metadata
@@ -252,6 +266,13 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
                     debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
                 except (KeyError, ZeroDivisionError):
                     debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+
+                if args.min_align_len is not None and align_len_q < args.min_align_len:
+                    filtered_align_len_count += 1
+                    continue
+                if args.max_align_len is not None and align_len_q > args.max_align_len:
+                    filtered_align_len_count += 1
+                    continue
 
                 if args.min_pid is not None and not passes_edit_distance_filter(alignment, args.min_pid):
                     filtered_pid_count += 1
@@ -278,6 +299,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
     else:
         for alignment in sam_filename.fetch():
             align_len = get_align_len(alignment)
+            align_len_q = get_aligned_query_len(alignment)
             if alignment.reference_name and align_len:
 
                 # Output the PID filtering metadata
@@ -288,6 +310,13 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
                     debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
                 except (KeyError, ZeroDivisionError):
                     debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+
+                if args.min_align_len is not None and align_len_q < args.min_align_len:
+                    filtered_align_len_count += 1
+                    continue
+                if args.max_align_len is not None and align_len_q > args.max_align_len:
+                    filtered_align_len_count += 1
+                    continue
 
                 if args.min_pid is not None and not passes_edit_distance_filter(alignment, args.min_pid):
                     filtered_pid_count += 1
@@ -317,6 +346,12 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
     unmapped_set = unmapped_set - mapped_set
     unmapped_count = len(unmapped_set)
     stdout.write(f"Unmapped read count: {unmapped_count}\n")
+
+    if args.min_align_len is not None or args.max_align_len is not None:
+        stdout.write(
+            f"Filtered {filtered_align_len_count} alignments outside aligned query length bounds "
+            f"(min_align_len={args.min_align_len}, max_align_len={args.max_align_len}).\n"
+        )
 
     # output PID filtering information
     if args.min_pid is not None:
@@ -846,8 +881,14 @@ if __name__ == "__main__":
         '--threads', type=int, default=3,
         help='threads utilized by minimap [3]')
     abundance_parser.add_argument(
-    '--min-pid', type=float, default=None,
-    help='Minimum percent identity (PID) based on NM tag. If not provided, no PID filter is applied.')
+        '--min-pid', type=float, default=95,
+        help='Minimum percent identity (PID) based on NM tag. Default: 95%%')
+    abundance_parser.add_argument(
+        '--min-align-len', type=int, default=600,
+        help='Minimum aligned query length (excludes soft/hard clipping).')
+    abundance_parser.add_argument(
+        '--max-align-len', type=int, default=2000,
+        help='Maximum aligned query length (excludes soft/hard clipping).')
 
     build_db_parser = subparsers.add_parser("build-database",
                                             help="Build custom Emu database")
