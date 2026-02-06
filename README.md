@@ -103,12 +103,12 @@ Each step of the installation process is expected to take a matter of seconds.
 |--keep-files| FALSE| keep working files in output-dir ( alignments [.sam], reads of specied length [.fa])|
 |--keep-counts| FALSE| include estimated read counts for each species in output*|
 |--keep-read-assignments| FALSE| output .tsv file with read assignment distributions: each row as an input read; each entry as the likelihood it is dervied from that taxa (taxid is the column header); each row sums to 1|
-|--output-unclassified| FALSE| generate two additional sequence files of unmapped and unclassified mapped input reads**|
+|--output-unclassified| FALSE| generate three additional sequence files: unmapped, filtered mapped, and unclassified mapped input reads**|
 |--threads| 3| number of threads utilized by minimap2|
 
 *Estimated read counts are based on likelihood probabilities and therefore may not be integer values. They are calculated as the product of estimated relative abundance and total classified reads.
 
-**Here, "unmapped reads" are reads that did not result in a mapping to the provided database with minimap2. "Unclassified mapped reads" are those that mapped only to database sequences of species that are presumed to not be present in the sample by Emu's algorithm (likely due to low overall abundance).
+**Here, "unmapped" reads are reads that did not result in a mapping to the provided database with minimap2. "Filtered mapped" reads are those that were mapped with minimap2, but all alignments for the given query (read) were filtered via the align-len and percent identity (pid) requirement parameters. "Unclassified mapped" reads are those that mapped only to database sequences of species that are presumed to not be present in the sample by Emu's algorithm (likely due to low overall abundance).
 
 Note: If you are experiencing heavy RAM consumption, first upgrade minimap2 to at least v2.22. If memory is still an issue, try decreasing the number of secondary alignments evaluated for each read (--N).
 

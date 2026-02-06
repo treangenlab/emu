@@ -238,7 +238,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
             int: mapped read count
     """
     # calculate log(L(read|seq)) for all alignments
-    log_p_rgs, unmapped_set = {}, set()
+    log_p_rgs, unmapped_set, all_queries_set = {}, set(), set()
     # pylint: disable=maybe-no-member
     sam_filename = pysam.AlignmentFile(sam_path, 'rb')
 
@@ -254,6 +254,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
 
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch():
+            all_queries_set.add(alignment.query_name)
             align_len = get_align_len(alignment)
             align_len_q = get_aligned_query_len(alignment)
             if alignment.reference_name and align_len:
@@ -299,6 +300,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
                 unmapped_set.add(alignment.query_name)
     else:
         for alignment in sam_filename.fetch():
+            all_queries_set.add(alignment.query_name)
             align_len = get_align_len(alignment)
             align_len_q = get_aligned_query_len(alignment)
             if alignment.reference_name and align_len:
@@ -345,9 +347,10 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
                 unmapped_set.add(alignment.query_name)
 
     mapped_set = set(log_p_rgs.keys())
-    unmapped_set = unmapped_set - mapped_set
-    unmapped_count = len(unmapped_set)
-    stdout.write(f"Unmapped read count: {unmapped_count}\n")
+    unmapped_set = unmapped_set - mapped_set # double check
+    filtered_set = all_queries_set - unmapped_set - mapped_set
+    stdout.write(f"Unmapped read count: {len(unmapped_set)}\n")
+    stdout.write(f"Filtered read count: {len(filtered_set)}\n")
 
     if args.min_align_len is not None or args.max_align_len is not None:
         stdout.write(
@@ -364,7 +367,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
     ## remove if p(r|s) < 0.01
     #min_p_thresh = math.log(0.01)
     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
-    return log_p_rgs, unmapped_set, mapped_set
+    return log_p_rgs, unmapped_set, mapped_set, filtered_set
 
 def expectation_maximization(log_p_rgs, freq):
     """One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
@@ -500,7 +503,7 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
 
 
 def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, mapped_count,
-                       unmapped_count, mapped_unclassified_count, counts=False):
+                       unmapped_count, mapped_unclassified_count, mapped_filtered_count, counts=False):
     """Converts freq to a pandas df where each row contains abundance and tax lineage for
                 classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
 
@@ -515,15 +518,16 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, mapped_count,
         returns(df): pandas df with lineage and abundances for values in f
     """
     #add tax lineage for values in freq
-    results_df = pd.DataFrame(zip(list(freq.keys()) + ['unmapped', 'mapped_unclassified'],
-                                  list(freq.values()) + [0, 0]),
+    results_df = pd.DataFrame(zip(list(freq.keys()) + ['unmapped', 'mapped_filtered', 'mapped_unclassified'],
+                                  list(freq.values()) + [0, 0, 0]),
                               columns=["tax_id", "abundance"]).set_index('tax_id')
     results_df = results_df.join(taxonomy_df, how='left').reset_index()
         #add in the estimated count values for the mapped and unmapped counts
     if counts:
         classified_count = mapped_count - mapped_unclassified_count
-        counts_series = pd.concat([(results_df["abundance"] * classified_count)[:-2],
-                                   pd.Series(unmapped_count), pd.Series(mapped_unclassified_count)],
+        counts_series = pd.concat([(results_df["abundance"] * classified_count)[:-3],
+                                   pd.Series(unmapped_count), pd.Series(mapped_filtered_count),
+                                   pd.Series(mapped_unclassified_count)],
                                     ignore_index=True)
         results_df["estimated counts"] = counts_series
     results_df.to_csv("{}.tsv".format(tsv_output_path), sep='\t', index=False)
@@ -960,7 +964,7 @@ if __name__ == "__main__":
         SAM_FILE = generate_alignments(args.input_file, out_file, args.db)
         log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = \
             get_cigar_op_log_probabilities(SAM_FILE)
-        log_prob_rgs, set_unmapped, set_mapped = log_prob_rgs_dict(
+        log_prob_rgs, set_unmapped, set_mapped, set_filtered = log_prob_rgs_dict(
             SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero, args)
         f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
@@ -970,7 +974,7 @@ if __name__ == "__main__":
         stdout.write(f"Unclassified mapped read count: {len(mapped_unclassified)}\n")
         freq_to_lineage_df(f_full, "{}_rel-abundance".format(out_file), df_taxonomy,
                            len(set_mapped), len(set_unmapped), len(mapped_unclassified),
-                           args.keep_counts)
+                           len(set_filtered), args.keep_counts)
 
 
         # output read assignment distributions as a tsv
@@ -992,6 +996,8 @@ if __name__ == "__main__":
                                                 set_unmapped)
             output_sequences(args.input_file[0], "{}_unclassified_mapped".format(out_file),
                              input_filetype, mapped_unclassified)
+            output_sequences(args.input_file[0], "{}_filtered_mapped".format(out_file),
+                             input_filetype, set_filtered)
 
         # clean up extra file
         if not args.keep_files:
