@@ -126,6 +126,15 @@ def get_align_len(alignment):
     return sum(alignment.get_cigar_stats()[0][cigar_op] for cigar_op in CIGAR_OPS_ALL)
 
 
+def get_aligned_query_len(alignment):
+    """Retrieve aligned query length excluding soft/hard clipping.
+
+        alignment (pysam.AlignmentFile): align of interest
+        return (int): aligned query length excluding S/H
+    """
+    return alignment.query_alignment_length
+
+
 def output_sequences(in_path, seq_output_path, input_type, keep_ids):
     """Output specified sequences from input_file based on sequence id.
 
@@ -142,7 +151,6 @@ def output_sequences(in_path, seq_output_path, input_type, keep_ids):
         for rec in SeqIO.parse(in_file, input_type):
             if ids_match(rec.id, getattr(rec, "name", ""), keep_ids):
                 SeqIO.write(rec, out_seq_file, input_type)
-
 
 def get_cigar_op_log_probabilities(sam_path):
     """P(align_type) for each type in CIGAR_OPS by counting how often the corresponding
@@ -179,6 +187,22 @@ def get_cigar_op_log_probabilities(sam_path):
     return [math.log(x) for x in np.array(cigar_stats_primary)/n_char], zero_locs, \
            dict_longest_align
 
+def passes_edit_distance_filter(alignment, min_pid):
+    """ Filter helper function for excluding alignments with percent identity below certain threshold,
+        helping ensure high-confidence only matches are used for taxonomic assignment
+
+        return True if alignment passes the minimum percent identity (PID) threshold
+        computed via NM tag of sam files
+        return False if threshold is not met or NM tag is missing.
+    """
+
+    try:
+        nm = alignment.get_tag("NM")  # edit distance from sam file
+        aligned_base = alignment.query_alignment_length
+        pid = 100 * (1 - (nm / aligned_base)) if aligned_base > 0 else 0
+        return pid >= min_pid
+    except (KeyError, ZeroDivisionError):
+        return False
 
 def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_align, align_len):
     """ log(L(r|s)) = log(P(cigar_op)) × n_cigar_op for CIGAR_OPS
@@ -200,8 +224,8 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     species_tid = int(ref_name.split(":")[0])
     return log_score, query_name, species_tid
 
-
-def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
+def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
+                      p_cigar_op_zero_locs=None, args=None):
     """dict containing log(L(read|seq)) for all pairwise alignments in sam file
 
         sam_path(str): path to sam file
@@ -214,14 +238,48 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
             int: mapped read count
     """
     # calculate log(L(read|seq)) for all alignments
-    log_p_rgs, unmapped_set = {}, set()
+    log_p_rgs, unmapped_set, all_queries_set = {}, set(), set()
     # pylint: disable=maybe-no-member
     sam_filename = pysam.AlignmentFile(sam_path, 'rb')
 
+    # track PID filtering stats
+    filtered_pid_count = 0
+
+    # track aligned length filtering stats
+    filtered_align_len_count = 0
+
+    #debug_path = os.path.join(args.output_dir, "pid_debug_output.txt")
+    #debug_pid_file = open(debug_path, "w", encoding="utf-8")
+    #debug_pid_file.write("read_id\tref_id\tNM\tpid\n")
+
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch():
+            all_queries_set.add(alignment.query_name)
             align_len = get_align_len(alignment)
+            align_len_q = get_aligned_query_len(alignment)
             if alignment.reference_name and align_len:
+
+                    # Output the PID filtering metadata
+                try:
+                    nm = alignment.get_tag("NM")
+                    aligned_bases = alignment.query_alignment_length
+                    pid = 100 * (1 - (nm / aligned_bases)) if aligned_bases > 0 else 0
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
+                except (KeyError, ZeroDivisionError):
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+                    pid = None
+
+                if args.min_align_len is not None and align_len_q < args.min_align_len:
+                    filtered_align_len_count += 1
+                    continue
+                if args.max_align_len is not None and align_len_q > args.max_align_len:
+                    filtered_align_len_count += 1
+                    continue
+
+                if args.min_pid is not None and not passes_edit_distance_filter(alignment, args.min_pid):
+                    filtered_pid_count += 1
+                    continue # skip low identity alignments
+
                 cigar_stats = get_align_stats(alignment)
                 log_score, query_name, species_tid = \
                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
@@ -242,8 +300,32 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                 unmapped_set.add(alignment.query_name)
     else:
         for alignment in sam_filename.fetch():
+            all_queries_set.add(alignment.query_name)
             align_len = get_align_len(alignment)
+            align_len_q = get_aligned_query_len(alignment)
             if alignment.reference_name and align_len:
+
+                # Output the PID filtering metadata
+                try:
+                    nm = alignment.get_tag("NM")
+                    aligned_bases = alignment.query_alignment_length
+                    pid = 100 * (1 - (nm / aligned_bases)) if aligned_bases > 0 else 0
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
+                except (KeyError, ZeroDivisionError):
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+                    pid = None
+
+                if args.min_align_len and align_len_q < args.min_align_len:
+                    filtered_align_len_count += 1
+                    continue
+                if args.max_align_len is not None and align_len_q > args.max_align_len:
+                    filtered_align_len_count += 1
+                    continue
+
+                if args.min_pid and not passes_edit_distance_filter(alignment, args.min_pid):
+                    filtered_pid_count += 1
+                    continue # skip low identity alignments
+
                 cigar_stats = get_align_stats(alignment)
                 if sum(cigar_stats[x] for x in p_cigar_op_zero_locs) == 0:
                     for i in sorted(p_cigar_op_zero_locs, reverse=True):
@@ -265,16 +347,27 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                 unmapped_set.add(alignment.query_name)
 
     mapped_set = set(log_p_rgs.keys())
-    unmapped_set = unmapped_set - mapped_set
-    unmapped_count = len(unmapped_set)
-    stdout.write(f"Unmapped read count: {unmapped_count}\n")
+    unmapped_set = unmapped_set - mapped_set # double check
+    filtered_set = all_queries_set - unmapped_set - mapped_set
+    stdout.write(f"Unmapped read count: {len(unmapped_set)}\n")
+    stdout.write(f"Filtered read count: {len(filtered_set)}\n")
+
+    if args.min_align_len is not None or args.max_align_len is not None:
+        stdout.write(
+            f"Filtered {filtered_align_len_count} alignments outside aligned query length bounds "
+            f"(min_align_len={args.min_align_len}, max_align_len={args.max_align_len}).\n"
+        )
+
+    # output PID filtering information
+    if args.min_pid is not None:
+        stdout.write(f"Filtered {filtered_pid_count} alignments below min-pid ({args.min_pid}%) threshold.\n")
+    #debug_pid_file.close()
 
     ## remove low likelihood alignments?
     ## remove if p(r|s) < 0.01
     #min_p_thresh = math.log(0.01)
     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
-    return log_p_rgs, unmapped_set, mapped_set
-
+    return log_p_rgs, unmapped_set, mapped_set, filtered_set
 
 def expectation_maximization(log_p_rgs, freq):
     """One iteration of the EM algorithm. Updates the relative abundance estimation in f based on
@@ -342,7 +435,8 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
     # check if there are enough reads
     if n_reads == 0:
         raise ValueError("0 reads mapped")
-    freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
+    freq = {int(k): 1 / n_db for k in db_ids}
+    counter = 1
 
     # set output abundance threshold
     freq_thresh = 1/(n_reads + 1)
@@ -409,7 +503,7 @@ def lineage_dict_from_tid(taxid, nodes_dict, names_dict):
 
 
 def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, mapped_count,
-                       unmapped_count, mapped_unclassified_count, counts=False):
+                       unmapped_count, mapped_unclassified_count, mapped_filtered_count, counts=False):
     """Converts freq to a pandas df where each row contains abundance and tax lineage for
                 classified species in f.keys(). Stores df as .tsv file in tsv_output_path.
 
@@ -424,15 +518,16 @@ def freq_to_lineage_df(freq, tsv_output_path, taxonomy_df, mapped_count,
         returns(df): pandas df with lineage and abundances for values in f
     """
     #add tax lineage for values in freq
-    results_df = pd.DataFrame(zip(list(freq.keys()) + ['unmapped', 'mapped_unclassified'],
-                                  list(freq.values()) + [0, 0]),
+    results_df = pd.DataFrame(zip(list(freq.keys()) + ['unmapped', 'mapped_filtered', 'mapped_unclassified'],
+                                  list(freq.values()) + [0, 0, 0]),
                               columns=["tax_id", "abundance"]).set_index('tax_id')
     results_df = results_df.join(taxonomy_df, how='left').reset_index()
         #add in the estimated count values for the mapped and unmapped counts
     if counts:
         classified_count = mapped_count - mapped_unclassified_count
-        counts_series = pd.concat([(results_df["abundance"] * classified_count)[:-2],
-                                   pd.Series(unmapped_count), pd.Series(mapped_unclassified_count)],
+        counts_series = pd.concat([(results_df["abundance"] * classified_count)[:-3],
+                                   pd.Series(unmapped_count), pd.Series(mapped_filtered_count),
+                                   pd.Series(mapped_unclassified_count)],
                                     ignore_index=True)
         results_df["estimated counts"] = counts_series
     results_df.to_csv("{}.tsv".format(tsv_output_path), sep='\t', index=False)
@@ -743,7 +838,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     return df_combined_full
 
 if __name__ == "__main__":
-    __version__ = "3.5.5"
+    __version__ = "3.6.0"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -792,6 +887,15 @@ if __name__ == "__main__":
     abundance_parser.add_argument(
         '--threads', type=int, default=3,
         help='threads utilized by minimap [3]')
+    abundance_parser.add_argument(
+        '--min-pid', type=float, default=0,
+        help='Minimum percent identity (PID) based on NM tag [0%%]')
+    abundance_parser.add_argument(
+        '--min-align-len', type=int, default=0,
+        help='Minimum aligned query length (excludes soft/hard clipping [0]')
+    abundance_parser.add_argument(
+        '--max-align-len', type=int, default=2000,
+        help='Maximum aligned query length (excludes soft/hard clipping) [2000]')
 
     build_db_parser = subparsers.add_parser("build-database",
                                             help="Build custom Emu database")
@@ -860,8 +964,8 @@ if __name__ == "__main__":
         SAM_FILE = generate_alignments(args.input_file, out_file, args.db)
         log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = \
             get_cigar_op_log_probabilities(SAM_FILE)
-        log_prob_rgs, set_unmapped, set_mapped = log_prob_rgs_dict(
-            SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
+        log_prob_rgs, set_unmapped, set_mapped, set_filtered = log_prob_rgs_dict(
+            SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero, args)
         f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
@@ -870,7 +974,7 @@ if __name__ == "__main__":
         stdout.write(f"Unclassified mapped read count: {len(mapped_unclassified)}\n")
         freq_to_lineage_df(f_full, "{}_rel-abundance".format(out_file), df_taxonomy,
                            len(set_mapped), len(set_unmapped), len(mapped_unclassified),
-                           args.keep_counts)
+                           len(set_filtered), args.keep_counts)
 
 
         # output read assignment distributions as a tsv
@@ -892,6 +996,8 @@ if __name__ == "__main__":
                                                 set_unmapped)
             output_sequences(args.input_file[0], "{}_unclassified_mapped".format(out_file),
                              input_filetype, mapped_unclassified)
+            output_sequences(args.input_file[0], "{}_filtered_mapped".format(out_file),
+                             input_filetype, set_filtered)
 
         # clean up extra file
         if not args.keep_files:
