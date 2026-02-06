@@ -248,9 +248,9 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
     # track aligned length filtering stats
     filtered_align_len_count = 0
 
-    debug_path = os.path.join(args.output_dir, "pid_debug_output.txt")
-    debug_pid_file = open(debug_path, "w", encoding="utf-8")
-    debug_pid_file.write("read_id\tref_id\tNM\tpid\n")
+    #debug_path = os.path.join(args.output_dir, "pid_debug_output.txt")
+    #debug_pid_file = open(debug_path, "w", encoding="utf-8")
+    #debug_pid_file.write("read_id\tref_id\tNM\tpid\n")
 
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch():
@@ -263,9 +263,10 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
                     nm = alignment.get_tag("NM")
                     aligned_bases = alignment.query_alignment_length
                     pid = 100 * (1 - (nm / aligned_bases)) if aligned_bases > 0 else 0
-                    debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
                 except (KeyError, ZeroDivisionError):
-                    debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+                    pid = None
 
                 if args.min_align_len is not None and align_len_q < args.min_align_len:
                     filtered_align_len_count += 1
@@ -307,18 +308,19 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
                     nm = alignment.get_tag("NM")
                     aligned_bases = alignment.query_alignment_length
                     pid = 100 * (1 - (nm / aligned_bases)) if aligned_bases > 0 else 0
-                    debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t{nm}\t{pid:.2f}\n")
                 except (KeyError, ZeroDivisionError):
-                    debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+                    #debug_pid_file.write(f"{alignment.query_name}\t{alignment.reference_name}\t0\n")
+                    pid = None
 
-                if args.min_align_len is not None and align_len_q < args.min_align_len:
+                if args.min_align_len and align_len_q < args.min_align_len:
                     filtered_align_len_count += 1
                     continue
                 if args.max_align_len is not None and align_len_q > args.max_align_len:
                     filtered_align_len_count += 1
                     continue
 
-                if args.min_pid is not None and not passes_edit_distance_filter(alignment, args.min_pid):
+                if args.min_pid and not passes_edit_distance_filter(alignment, args.min_pid):
                     filtered_pid_count += 1
                     continue # skip low identity alignments
 
@@ -356,7 +358,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align,
     # output PID filtering information
     if args.min_pid is not None:
         stdout.write(f"Filtered {filtered_pid_count} alignments below min-pid ({args.min_pid}%) threshold.\n")
-    debug_pid_file.close()
+    #debug_pid_file.close()
 
     ## remove low likelihood alignments?
     ## remove if p(r|s) < 0.01
@@ -831,7 +833,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     return df_combined_full
 
 if __name__ == "__main__":
-    __version__ = "3.5.5"
+    __version__ = "3.6.0"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -881,14 +883,14 @@ if __name__ == "__main__":
         '--threads', type=int, default=3,
         help='threads utilized by minimap [3]')
     abundance_parser.add_argument(
-        '--min-pid', type=float, default=95,
-        help='Minimum percent identity (PID) based on NM tag. Default: 95%%')
+        '--min-pid', type=float, default=0,
+        help='Minimum percent identity (PID) based on NM tag [95%%]')
     abundance_parser.add_argument(
-        '--min-align-len', type=int, default=600,
-        help='Minimum aligned query length (excludes soft/hard clipping).')
+        '--min-align-len', type=int, default=0,
+        help='Minimum aligned query length (excludes soft/hard clipping [0]')
     abundance_parser.add_argument(
         '--max-align-len', type=int, default=2000,
-        help='Maximum aligned query length (excludes soft/hard clipping).')
+        help='Maximum aligned query length (excludes soft/hard clipping) [2000]')
 
     build_db_parser = subparsers.add_parser("build-database",
                                             help="Build custom Emu database")
@@ -959,6 +961,7 @@ if __name__ == "__main__":
             get_cigar_op_log_probabilities(SAM_FILE)
         log_prob_rgs, set_unmapped, set_mapped = log_prob_rgs_dict(
             SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero, args)
+        
         f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
