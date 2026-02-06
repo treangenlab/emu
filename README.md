@@ -42,7 +42,7 @@ tar -xvf emu.tar
 
 ##### 2. Activate appropriate conda environment
 
-Emu requires Python version to be >=3.6 and <3.11. 
+Emu requires Python version to be >=3.6. 
 
 ###### Option A: Create new Conda environment
 
