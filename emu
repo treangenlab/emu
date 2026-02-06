@@ -432,7 +432,8 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
     # check if there are enough reads
     if n_reads == 0:
         raise ValueError("0 reads mapped")
-    freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
+    freq = {int(k): 1 / n_db for k in db_ids}
+    counter = 1
 
     # set output abundance threshold
     freq_thresh = 1/(n_reads + 1)
@@ -884,7 +885,7 @@ if __name__ == "__main__":
         help='threads utilized by minimap [3]')
     abundance_parser.add_argument(
         '--min-pid', type=float, default=0,
-        help='Minimum percent identity (PID) based on NM tag [95%%]')
+        help='Minimum percent identity (PID) based on NM tag [0%%]')
     abundance_parser.add_argument(
         '--min-align-len', type=int, default=0,
         help='Minimum aligned query length (excludes soft/hard clipping [0]')
@@ -961,7 +962,6 @@ if __name__ == "__main__":
             get_cigar_op_log_probabilities(SAM_FILE)
         log_prob_rgs, set_unmapped, set_mapped = log_prob_rgs_dict(
             SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero, args)
-        
         f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
