@@ -30,7 +30,7 @@ CIGAR_OPS_ALL = [0, 1, 2, 4]
 TAXONOMY_RANKS = ['species', 'genus', 'family', 'order', 'class', 'phylum', 'clade', 'superkingdom']
 RANKS_PRINTOUT = ['tax_id'] + TAXONOMY_RANKS + ['subspecies', 'species subgroup', 'species group']
 RANKS_ORDER = ['tax_id'] + TAXONOMY_RANKS[:6] + TAXONOMY_RANKS[7:]
-LOG_LIKELIHOOD_DIFF_TOLERANCE = 1e-9
+LOG_LIKELIHOOD_DIFF_TOLERANCE = 1e-5
 
 
 def open_maybe_gzip(path, mode="rt"):
@@ -465,12 +465,12 @@ def expectation_maximization_iterations(log_p_rgs, db_ids, lli_thresh, input_thr
             freq = {k: v for k, v in freq.items() if v >= freq_thresh}
                 # remove tax id if less than the frequency threshold
             freq_full, updated_log_likelihood, p_sgr = expectation_maximization(log_p_rgs, freq)
-            freq_set_thresh = None
+            freq_set_thresh, p_sgr_thresh = None, None
             if freq_thresh < input_threshold:
                 freq = {k: v for k, v in freq_full.items() if v >= input_threshold}
-                freq_set_thresh, updated_log_likelihood, p_sgr = \
+                freq_set_thresh, updated_log_likelihood, p_sgr_thresh = \
                     expectation_maximization(log_p_rgs, freq)
-            return freq_full, freq_set_thresh, p_sgr
+            return freq_full, freq_set_thresh, p_sgr, p_sgr_thresh
 
         #output current estimation
         #freq_to_lineage_df(freq, f"{out_file}_{counter}", df_nodes, df_names)
@@ -838,7 +838,7 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
     return df_combined_full
 
 if __name__ == "__main__":
-    __version__ = "3.6.1"
+    __version__ = "3.6.2"
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
     subparsers = parser.add_subparsers(dest="subparser_name", help='sub-commands')
@@ -966,7 +966,7 @@ if __name__ == "__main__":
             get_cigar_op_log_probabilities(SAM_FILE)
         log_prob_rgs, set_unmapped, set_mapped, set_filtered = log_prob_rgs_dict(
             SAM_FILE, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero, args)
-        f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
+        f_full, f_set_thresh, read_dist, read_dist_thresh = expectation_maximization_iterations(log_prob_rgs,
                                                                    db_species_tids,
                                                                    .01, args.min_abundance)
         classified_reads = {read_id for inner_dict in read_dist.values() for read_id in inner_dict}
@@ -983,11 +983,15 @@ if __name__ == "__main__":
 
         # convert and save frequency to a tsv
         if f_set_thresh:
+            classified_reads_thresh = {read_id for inner_dict in read_dist_thresh.values() for read_id in inner_dict}
+            mapped_unclassified_thresh = set_mapped - classified_reads_thresh
+            stdout.write(f"Unclassified mapped read count for min abundance threshold {args.min_abundance}: "
+                         f"{len(mapped_unclassified_thresh)}\n")
             freq_to_lineage_df(
                 f_set_thresh,
                 "{}_rel-abundance-threshold-{}".format(out_file, args.min_abundance),
-                df_taxonomy, len(set_mapped), len(set_unmapped), len(mapped_unclassified),
-                args.keep_counts)
+                df_taxonomy, len(set_mapped), len(set_unmapped), len(mapped_unclassified_thresh),
+                len(set_filtered), args.keep_counts)
 
         # gather input sequences that are unmapped according to minimap2
         if args.output_unclassified:
@@ -998,6 +1002,9 @@ if __name__ == "__main__":
                              input_filetype, mapped_unclassified)
             output_sequences(args.input_file[0], "{}_filtered_mapped".format(out_file),
                              input_filetype, set_filtered)
+            if f_set_thresh:
+                output_sequences(args.input_file[0], "{}_unclassified_mapped_threshold-{}".format(out_file, args.min_abundance),
+                                 input_filetype, mapped_unclassified_thresh)
 
         # clean up extra file
         if not args.keep_files:
