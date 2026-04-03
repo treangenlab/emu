@@ -174,6 +174,8 @@ Our pre-built databases and files\scripts used to construct the databases are st
 |[SILVA v138.2](https://www.arb-silva.de/) has been built courtesy of @maddne. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='silva-138.2'`|
 |[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 fungi](https://dx.doi.org/10.15156/BIO/1280049) has been pre-built for Emu v3.0+. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='unite-fungi'`|
 |[UNITE](https://unite.ut.ee/repository.php) [general fasta v8.3 all eukaryotes](https://dx.doi.org/10.15156/BIO/1280127) has been pre-built for Emu v3.0+. This database has not yet been tested or validated with Emu.| `export EMU_PREBUILT_DB='unite-all'`|
+|[Updated emu](https://github.com/treangenlab/emu/issues/118) rrnDB v5.10 and NCBI March 2026 courtesy of @UFDuttonLab | Found on OSF: https://osf.io/32sh5/overview | 
+
 
 
 Then run the following commands:
