@@ -667,7 +667,13 @@ def create_direct_seq2tax_dict(seq2tax_path):
 
 
 def create_unique_seq_dict(db_fasta_path, seq2tax_dict):
-    """ Creates dict of unique sequences to for the sequences connected to each species taxid
+    """ Creates dict of unique sequences to for the sequences connected to each species taxid.
+
+        Note that this function returns a dictionary where the keys are the sequences themselves,
+        and the values are dictionaries mapping taxids to lists of sequence ids. This is because
+        multiple sequences may be identical, and we want to keep track of all the taxids and
+        sequence ids that correspond to each unique sequence.
+
 
         db_fasta_path(str): path to fasta file of database sequences
         seq2tax_dict{str:int}: dict[seqid] = species taxid
@@ -837,6 +843,56 @@ def combine_outputs(dir_path, rank, split_files=False, count_table=False):
         stdout.write("Combined table generated: {}\n".format(out_path))
     return df_combined_full
 
+
+def build_database_main(args):
+    '''
+    Main function for building custom Emu database.
+
+    Generates fasta file of sequences in desired format and generates taxonomy.tsv file with
+    taxonomic lineage for each taxid in the database. If NCBI taxonomy is provided,
+    the taxonomic lineage is built using the nodes.dmp and names.dmp files. If direct taxonomy
+    is provided, the taxonomic lineage is built using the provided taxonomy list.
+
+    :param args:    Command line arguments for building custom Emu database. Args used:
+                        - db_name: name for custom database
+                        - db_output_dir: path to output directory for custom database (optional, default is current working directory)
+                        - sequences: path to fasta of database sequences
+                        - seq2tax: path to seqid-taxid mapping file
+                        - ncbi_taxonomy: path to NCBI taxonomy folder containing nodes.dmp and names.dmp files (optional)
+                        - taxonomy_list: path to tsv file containing taxonomic lineage for each taxid in the database (optional, required if ncbi_taxonomy not provided)
+                            (not required if the ncbi_taxonomy argument is provided)
+
+    :return:
+    '''
+    # emu_db_path = os.getcwd()
+    emu_db_path = args.db_output_dir if os.path.isdir(args.db_output_dir) else os.getcwd()
+    custom_db_path = os.path.join(emu_db_path, args.db_name)
+    if not os.path.exists(custom_db_path):
+        os.makedirs(custom_db_path)
+    stdout.write("Emu custom database generating at path: {} ...\n".format(custom_db_path))
+
+    # set up seq2tax dict for either NCBI or direct taxonomy
+    if args.ncbi_taxonomy:
+        dict_names = create_names_dict(os.path.join(args.ncbi_taxonomy, 'names.dmp'))
+        dict_nodes = create_nodes_dict(os.path.join(args.ncbi_taxonomy, 'nodes.dmp'))
+        seq2tax = create_species_seq2tax_dict(args.seq2tax, dict_nodes)
+    else:
+        seq2tax = create_direct_seq2tax_dict(args.seq2tax)
+
+    # print fasta in desired Emu database format
+    db_unique_ids = set(seq2tax.values())
+    dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
+    fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
+    SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
+    # build taxonomy for database
+    output_taxonomy_location = os.path.join(custom_db_path, "taxonomy.tsv")
+    if args.ncbi_taxonomy:
+        build_ncbi_taxonomy(db_unique_ids, dict_nodes, dict_names, output_taxonomy_location)
+    else:
+        build_direct_taxonomy(db_unique_ids, args.taxonomy_list, output_taxonomy_location)
+    stdout.write("Database creation successful\n")
+
+
 if __name__ == "__main__":
     __version__ = "3.6.2"
     parser = argparse.ArgumentParser()
@@ -904,17 +960,24 @@ if __name__ == "__main__":
         help='custom database name')
     build_db_parser.add_argument(
         '--sequences', type=str, required=True,
-        help='path to fasta of database sequences')
+        help='(input) path to fasta of database sequences')
     build_db_parser.add_argument(
         '--seq2tax', type=str, required=True,
-        help='path to tsv mapping species tax id to fasta sequence headers')
+        help='(input) path to tsv mapping species tax id to fasta sequence headers')
+    build_db_parser.add_argument(
+        '--db_output_dir', type=str, default="./",
+        help='output directory for custom database [./]'
+    )
     taxonomy_group = build_db_parser.add_mutually_exclusive_group(required=True)
     taxonomy_group.add_argument(
         '--ncbi-taxonomy', type=str,
-        help='path to directory containing both a names.dmp and nodes.dmp file')
+        help='(input) path to directory containing both a names.dmp and nodes.dmp file. If '
+             'not provided, the taxonomy-list argument must be provided.')
     taxonomy_group.add_argument(
         '--taxonomy-list', type=str,
-        help='path to .tsv file mapping full lineage to corresponding taxid')
+        help='(input) path to .tsv file mapping full lineage to corresponding taxid. Not '
+             'required if the NCBI taxonomy path is provided.')
+
 
     collapse_parser = subparsers.add_parser("collapse-taxonomy",
                                             help="Collapse emu output at specified taxonomic rank")
@@ -1014,34 +1077,7 @@ if __name__ == "__main__":
 
     # create a custom database with ncbi taxonomy
     if args.subparser_name == "build-database":
-        emu_db_path = os.getcwd()
-        custom_db_path = os.path.join(emu_db_path, args.db_name)
-        if not os.path.exists(custom_db_path):
-            os.makedirs(custom_db_path)
-        stdout.write("Emu custom database generating at path: {} ...\n".format(custom_db_path))
-
-        # set up seq2tax dict for either NCBI or direct taxonomy
-        if args.ncbi_taxonomy:
-            dict_names = create_names_dict(os.path.join(args.ncbi_taxonomy, 'names.dmp'))
-            dict_nodes = create_nodes_dict(os.path.join(args.ncbi_taxonomy, 'nodes.dmp'))
-            seq2tax = create_species_seq2tax_dict(args.seq2tax, dict_nodes)
-        else:
-            seq2tax = create_direct_seq2tax_dict(args.seq2tax)
-
-        # print fasta in desired Emu database format
-        db_unique_ids = set(seq2tax.values())
-        dict_fasta = create_unique_seq_dict(args.sequences, seq2tax)
-        fasta_records = create_reduced_fasta(dict_fasta, args.db_name)
-        SeqIO.write(fasta_records, os.path.join(custom_db_path, 'species_taxid.fasta'), "fasta")
-
-        # build taxonomy for database
-        output_taxonomy_location = os.path.join(custom_db_path, "taxonomy.tsv")
-        if args.ncbi_taxonomy:
-            build_ncbi_taxonomy(db_unique_ids, dict_nodes, dict_names, output_taxonomy_location)
-        else:
-            build_direct_taxonomy(db_unique_ids, args.taxonomy_list, output_taxonomy_location)
-        stdout.write("Database creation successful\n")
-
+        build_database_main(args)
 
     # collapse Emu results at desired taxonomic rank
     if args.subparser_name == "collapse-taxonomy":
